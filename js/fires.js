@@ -1,0 +1,416 @@
+import { canvasRenderer, fireLayer } from "./map.js";
+
+import { termLog, updateLastFireUpdate, updateLastUpdate } from "./ui.js";
+
+const NASA_API_KEY = "d9fe3ef6c297fec40b61f84714b55a56";
+
+let allFires = [];
+
+let timeSteps = [];
+
+let currentStepIndex = -1;
+
+let animationInterval = null;
+
+let pulseInterval = null;
+
+const activeMarkers = new Set();
+
+// ------------------------------------------------------
+// Styles incendies
+// ------------------------------------------------------
+
+const FIRE_STYLES = {
+  c1: {
+    fillColor: "#fff200",
+    color: "#ffffff",
+    fillOpacity: 1,
+    weight: 3,
+  },
+
+  c2: {
+    fillColor: "#ffd000",
+    color: "#ffef9f",
+    fillOpacity: 0.98,
+    weight: 3,
+  },
+
+  c3: {
+    fillColor: "#ff9800",
+    color: "#ff5e00",
+    fillOpacity: 0.95,
+    weight: 3,
+  },
+
+  c4: {
+    fillColor: "#ff5c00",
+    color: "#d62828",
+    fillOpacity: 0.9,
+    weight: 2,
+  },
+
+  c5: {
+    fillColor: "#d62828",
+    color: "#8b0000",
+    fillOpacity: 0.8,
+    weight: 2,
+  },
+
+  c6: {
+    fillColor: "#8b0000",
+    color: "#4a0404",
+    fillOpacity: 0.65,
+    weight: 2,
+  },
+
+  c7: {
+    fillColor: "#4a0404",
+    color: "#1f1f1f",
+    fillOpacity: 0.45,
+    weight: 1,
+  },
+
+  c8: {
+    fillColor: "#202020",
+    color: "#000000",
+    fillOpacity: 0.25,
+    weight: 1,
+  },
+};
+
+// ------------------------------------------------------
+// Utilitaires
+// ------------------------------------------------------
+
+function formatDate(date) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function categoryFor(ageHours) {
+  if (ageHours <= 3) return "c1";
+  if (ageHours <= 6) return "c2";
+  if (ageHours <= 12) return "c3";
+  if (ageHours <= 24) return "c4";
+  if (ageHours <= 36) return "c5";
+  if (ageHours <= 48) return "c6";
+  if (ageHours <= 72) return "c7";
+
+  return "c8";
+}
+
+function isHotFire(category) {
+  return ["c1", "c2", "c3"].includes(category);
+}
+
+function radiusFor(category, frp) {
+  const base = Math.min(Math.max(frp * 0.45, 7), 18);
+
+  switch (category) {
+    case "c1":
+      return base;
+
+    case "c2":
+      return base - 1;
+
+    case "c3":
+      return base - 2;
+
+    case "c4":
+      return 7;
+
+    case "c5":
+      return 6;
+
+    case "c6":
+      return 5;
+
+    case "c7":
+      return 4;
+
+    default:
+      return 3;
+  }
+}
+
+// ------------------------------------------------------
+// Lecture CSV NASA
+// ------------------------------------------------------
+
+async function fetchCsv(url, name) {
+  termLog(`GET ${name}`);
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(response.status);
+    }
+
+    const csv = await response.text();
+
+    const lines = csv.trim().split("\n");
+
+    const headers = lines[0].split(",").map((x) => x.trim());
+
+    const result = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(",");
+
+      const lat = Number(row[headers.indexOf("latitude")]);
+
+      const lng = Number(row[headers.indexOf("longitude")]);
+
+      const frp = Number(row[headers.indexOf("frp")]) || 1;
+
+      const date = row[headers.indexOf("acq_date")];
+
+      const time = (row[headers.indexOf("acq_time")] || "0000").padStart(
+        4,
+        "0",
+      );
+
+      const dateObj = new Date(
+        `${date}T${time.substring(0, 2)}:${time.substring(2)}:00Z`,
+      );
+
+      if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        continue;
+      }
+
+      result.push({
+        lat,
+
+        lng,
+
+        frp,
+
+        timestamp: dateObj.getTime(),
+
+        formattedDateTime: formatDate(dateObj),
+
+        source: name,
+
+        marker: null,
+
+        glowMarker: null,
+
+        category: null,
+      });
+    }
+
+    termLog(`${name} : ${result.length} points`);
+
+    return result;
+  } catch (error) {
+    console.error("NASA erreur", error);
+
+    return [];
+  }
+}
+
+// ------------------------------------------------------
+// Chargement NASA
+// ------------------------------------------------------
+
+export async function loadFires() {
+  const bbox = "-5.5,41.0,9.8,51.5";
+
+  const sources = [
+    {
+      name: "VIIRS SNPP",
+      url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${NASA_API_KEY}/VIIRS_SNPP_NRT/${bbox}/5`,
+    },
+
+    {
+      name: "VIIRS NOAA20",
+      url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${NASA_API_KEY}/VIIRS_NOAA20_NRT/${bbox}/5`,
+    },
+
+    {
+      name: "MODIS",
+      url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${NASA_API_KEY}/MODIS_NRT/${bbox}/5`,
+    },
+  ];
+
+  const results = await Promise.all(
+    sources.map((s) => fetchCsv(s.url, s.name)),
+  );
+
+  fireLayer.clearLayers();
+
+  allFires = results.flat();
+
+  allFires.sort((a, b) => a.timestamp - b.timestamp);
+
+  timeSteps = [
+    ...new Map(
+      allFires.map((f) => [
+        f.timestamp,
+        {
+          timestamp: f.timestamp,
+          label: f.formattedDateTime,
+        },
+      ]),
+    ).values(),
+  ];
+
+const lastIndex = timeSteps.length - 1;
+
+
+const slider = document.getElementById(
+  "time-slider"
+);
+
+
+if (slider) {
+
+  slider.min = 0;
+
+  slider.max = lastIndex;
+
+  slider.value = lastIndex;
+
+}
+
+
+renderStep(lastIndex);
+
+updateFireSliderLabel(lastIndex);
+
+  updateFireStatus();
+
+  startPulse();
+}
+
+// ------------------------------------------------------
+// Rendu carte
+// ------------------------------------------------------
+
+function renderStep(index) {
+  const step = timeSteps[index];
+
+  if (!step) {
+    return;
+  }
+
+  allFires.forEach((fire) => {
+    if (fire.timestamp > step.timestamp) {
+      return;
+    }
+
+    const age = (step.timestamp - fire.timestamp) / 3600000;
+
+    const category = categoryFor(age);
+
+    const radius = radiusFor(category, fire.frp);
+
+    if (!fire.marker) {
+      fire.marker = L.circleMarker([fire.lat, fire.lng], {
+        renderer: canvasRenderer,
+        radius,
+        ...FIRE_STYLES[category],
+      }).addTo(fireLayer);
+
+      fire.marker.bindPopup(
+        `
+     🔥 ${category}<br>
+     Source : ${fire.source}<br>
+     Date : ${fire.formattedDateTime}<br>
+     FRP : ${fire.frp} MW
+     `,
+      );
+    }
+
+    if (isHotFire(category) && !fire.glowMarker) {
+      fire.glowMarker = L.circleMarker([fire.lat, fire.lng], {
+        renderer: canvasRenderer,
+        radius: radius + 6,
+        fillColor: "#ffe600",
+        color: "transparent",
+        fillOpacity: 0.35,
+        interactive: false,
+      }).addTo(fireLayer);
+
+      activeMarkers.add(fire);
+    }
+
+    fire.marker.setStyle(FIRE_STYLES[category]);
+
+    fire.category = category;
+  });
+
+  currentStepIndex = index;
+}
+
+// ------------------------------------------------------
+// Animation feu récent
+// ------------------------------------------------------
+
+export function startPulse() {
+  if (pulseInterval) {
+    return;
+  }
+
+  let phase = 0;
+
+  pulseInterval = setInterval(() => {
+    phase += 0.3;
+
+    activeMarkers.forEach((fire) => {
+      if (!fire.marker || !fire.glowMarker) {
+        return;
+      }
+
+      const radius = radiusFor(fire.category, fire.frp);
+
+      fire.marker.setRadius(radius * (1 + Math.sin(phase) * 0.08));
+
+      fire.glowMarker.setRadius((radius + 5) * (1 + Math.sin(phase) * 0.25));
+    });
+  }, 40);
+}
+
+function updateFireStatus() {
+  if (timeSteps.length === 0) {
+    return;
+  }
+
+  const lastFire = timeSteps[timeSteps.length - 1];
+
+  updateLastFireUpdate(lastFire.label);
+}
+
+function updateFireSliderLabel(index) {
+  const slider = document.getElementById("time-slider");
+
+  const label = document.getElementById("time-slider-label");
+
+  if (!slider || !label) {
+    return;
+  }
+
+  const step = timeSteps[index];
+
+  if (!step) {
+    return;
+  }
+
+  slider.value = index;
+
+  label.textContent = `🔥 Historique incendies : ${step.label}`;
+}
+
+window.addEventListener("fire-time-change", (event) => {
+  const index = event.detail;
+
+  renderStep(index);
+
+  updateFireSliderLabel(index);
+});
