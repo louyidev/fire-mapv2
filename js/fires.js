@@ -261,28 +261,21 @@ export async function loadFires() {
     ).values(),
   ];
 
-const lastIndex = timeSteps.length - 1;
+  const lastIndex = timeSteps.length - 1;
 
+  const slider = document.getElementById("time-slider");
 
-const slider = document.getElementById(
-  "time-slider"
-);
+  if (slider) {
+    slider.min = 0;
 
+    slider.max = lastIndex;
 
-if (slider) {
+    slider.value = lastIndex;
+  }
 
-  slider.min = 0;
+  renderStep(lastIndex);
 
-  slider.max = lastIndex;
-
-  slider.value = lastIndex;
-
-}
-
-
-renderStep(lastIndex);
-
-updateFireSliderLabel(lastIndex);
+  updateFireSliderLabel(lastIndex);
 
   updateFireStatus();
 
