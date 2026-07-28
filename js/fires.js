@@ -1,6 +1,11 @@
 import { canvasRenderer, fireLayer } from "./map.js";
 
-import { termLog, updateLastFireUpdate, updateLastUpdate } from "./ui.js";
+import {
+  termLog,
+  updateLastFireUpdate,
+  updateLastUpdate,
+  updateStatus,
+} from "./ui.js";
 
 const NASA_API_KEY = "d9fe3ef6c297fec40b61f84714b55a56";
 
@@ -261,6 +266,12 @@ export async function loadFires() {
     ).values(),
   ];
 
+  if (timeSteps.length === 0) {
+    updateStatus("🔥 Aucun foyer détecté");
+
+    return;
+  }
+
   const lastIndex = timeSteps.length - 1;
 
   const slider = document.getElementById("time-slider");
@@ -278,6 +289,8 @@ export async function loadFires() {
   updateFireSliderLabel(lastIndex);
 
   updateFireStatus();
+
+  updateStatus(`🔥 ${allFires.length} foyers détectés`);
 
   startPulse();
 }
