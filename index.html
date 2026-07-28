@@ -15,11 +15,13 @@
 <body>
   <div id="map"></div>
 
+  <!-- Bandeau Relevé -->
   <div class="last-update-banner" id="last-update-banner" style="display: none">
     <span>🛰️ Statut Thermique :</span>
     <span class="time-badge" id="last-update-text">--/--/-- à --:--</span>
   </div>
 
+  <!-- Carte d'information & Légende -->
   <div class="info-card">
     <h3>🇪🇺 Analyse des Foyers</h3>
     <div class="status-container">
@@ -29,53 +31,55 @@
     <button class="btn" id="btn-reload">Actualiser les flux</button>
 
     <div class="legend">
-      <div class="legend-item">
-        <span class="dot dot-active"></span> Actif (&lt;12h)
-      </div>
-      <div class="legend-item">
-        <span class="dot dot-medium"></span> Atténué (12-36h)
-      </div>
-      <div class="legend-item">
-        <span class="dot dot-old"></span> Ancien (&gt;36h)
-      </div>
+      <div class="legend-item"><span class="dot dot-active"></span> Actif (&lt;12h)</div>
+      <div class="legend-item"><span class="dot dot-medium"></span> Atténué (12-36h)</div>
+      <div class="legend-item"><span class="dot dot-old"></span> Ancien (&gt;36h)</div>
       <div class="map-view-selector">
-        <label>
-          <input type="radio" name="map-view" id="view-gironde" value="gironde" checked />
-          🔥 Gironde
-        </label>
-        <label>
-          <input type="radio" name="map-view" id="view-france" value="france" />
-          🇫🇷 France
-        </label>
+        <label><input type="radio" name="map-view" id="view-gironde" value="gironde" checked /> 🔥 Gironde</label>
+        <label><input type="radio" name="map-view" id="view-france" value="france" /> 🇫🇷 France</label>
       </div>
     </div>
   </div>
 
-  <!-- Mini-terminal de suivi des appels API -->
+  <!-- Terminal API Logs -->
   <div class="terminal-log" id="terminal-log" style="display: none"></div>
 
-  <div class="timeline-card" id="timeline-panel" style="display: none">
-    <div class="timeline-header">
-      <span>⏱️ Chronologie</span>
-      <div class="time-display" id="time-display">--/--/-- --:--</div>
+  <!-- PANNEAU DES CONTRÔLES COMPACTS (VENT & FEUX) -->
+  <div class="map-controls-panel">
+
+    <!-- Slider Vent -->
+    <div id="wind-controls" class="control-card wind-card">
+      <div class="control-row">
+        <button id="wind-play-btn" class="btn-play wind-btn" aria-label="Animer le vent">▶</button>
+        <div class="slider-wrapper">
+          <div class="slider-info">
+            <span class="control-title">🌬️ Vent</span>
+            <strong id="wind-hour-value" class="badge wind-badge">--/--/-- --:--</strong>
+          </div>
+          <input type="range" id="wind-slider" min="0" max="167" value="0" step="1">
+        </div>
+      </div>
     </div>
-    <div class="timeline-controls">
-      <button class="btn-play" id="btn-play">▶ Jouer</button>
-      <input type="range" id="time-slider" class="slider" min="0" max="0" value="0" />
+
+    <!-- Slider Historique Feux -->
+    <div class="timeline-card control-card fire-card" id="timeline-panel" style="display: none">
+      <div class="control-row">
+        <button class="btn-play fire-btn" id="btn-play" aria-label="Animer la chronologie">▶</button>
+        <div class="slider-wrapper">
+          <div class="slider-info">
+            <span class="control-title">⏱️ Feux</span>
+            <div class="time-display badge fire-badge" id="time-display">--/--/-- --:--</div>
+          </div>
+          <input type="range" id="time-slider" class="slider" min="0" max="0" value="0" />
+        </div>
+      </div>
     </div>
+
   </div>
 
-  <div id="wind-control">
-    <label>
-      🌬️ Heure du vent :
-      <span id="wind-hour-value">0h</span>
-    </label>
-
-    <input id="wind-slider" type="range" min="0" max="71" value="0">
-  </div>
-
-  <!-- Leaflet JS -->
+  <!-- Leaflet JS & App -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-velocity@1.3.0/dist/leaflet-velocity.min.js"></script>
   <script type="module" src="./js/app.js"></script>
 </body>
 

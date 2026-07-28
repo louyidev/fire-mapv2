@@ -1,10 +1,20 @@
+/* ======================================================
+   1. RESET & STRUCTURE DE BASE
+   ====================================================== */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
+
 html,
 body {
   width: 100%;
@@ -23,25 +33,34 @@ body {
   z-index: 1;
 }
 
-/* Bandeau du dernier relevé (toujours en haut au centre, priorité visuelle) */
+/* Base commune pour tous les panneaux (Glassmorphism) */
+.last-update-banner,
+.info-card,
+.terminal-log,
+.control-card {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ======================================================
+   2. BANDEAU HAUT (STATUT THERMIQUE)
+   ====================================================== */
 .last-update-banner {
   position: absolute;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid #334155;
-  padding: 8px 18px;
+  padding: 6px 14px;
   border-radius: 30px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: clamp(0.75rem, 2.2vw, 0.95rem);
+  font-size: clamp(0.75rem, 2.2vw, 0.88rem);
   font-weight: bold;
-  color: #f8fafc;
   pointer-events: none;
   max-width: 92vw;
   white-space: nowrap;
@@ -50,41 +69,39 @@ body {
   color: #38bdf8;
 }
 
-/* Carte d'info : condensée par défaut, encore plus petite sur mobile */
+/* ======================================================
+   3. CARTE D'INFO & LÉGENDE (HAUT DROITE)
+   ====================================================== */
 .info-card {
   position: absolute;
   top: 12px;
   right: 12px;
   z-index: 1000;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid #334155;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 10px;
-  width: 240px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
-  font-size: 0.78rem;
+  width: 230px;
+  font-size: 0.75rem;
 }
 .info-card h3 {
-  font-size: 0.85rem;
-  margin-bottom: 6px;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
 }
 
 .status-container {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 6px 0;
+  gap: 6px;
+  margin: 4px 0;
 }
 .status-text {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: #38bdf8;
   font-weight: bold;
 }
 
 .spinner {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
   border: 2px solid rgba(56, 189, 248, 0.2);
   border-top-color: #38bdf8;
   border-radius: 50%;
@@ -103,11 +120,12 @@ body {
   background: #ef4444;
   color: white;
   border: none;
-  padding: 6px;
+  padding: 5px;
   border-radius: 6px;
   cursor: pointer;
   font-weight: bold;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  transition: background 0.2s;
 }
 .btn:hover {
   background: #dc2626;
@@ -118,13 +136,13 @@ body {
 }
 
 .legend {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #334155;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.68rem;
+  gap: 3px;
+  font-size: 0.65rem;
 }
 .legend-item {
   display: flex;
@@ -132,8 +150,8 @@ body {
   gap: 6px;
 }
 .dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
@@ -153,62 +171,206 @@ body {
   opacity: 0.6;
 }
 
-/* Panneau chronologie, toujours en bas, centré */
-.timeline-card {
+.map-view-selector {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.map-view-selector label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ======================================================
+   4. SLIDERS ULTRA-COMPACTS (BAS DE PAGE)
+   ====================================================== */
+.map-controls-panel {
   position: absolute;
-  bottom: 14px;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid #334155;
-  padding: 10px 14px;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 560px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.timeline-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.75rem;
-}
-.time-display {
-  font-size: clamp(0.8rem, 2.2vw, 1rem);
-  font-weight: bold;
-  color: #f59e0b;
+  gap: 6px;
+  width: 92%;
+  max-width: 440px;
+  pointer-events: none;
 }
 
-.timeline-controls {
+.control-card {
+  pointer-events: auto;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.control-row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
+.slider-wrapper {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slider-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  line-height: 1;
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+}
+
+.control-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.badge {
+  font-size: 0.68rem;
+  font-weight: bold;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.wind-badge {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-family: monospace; /* Alignement propre des chiffres */
+  font-size: 0.65rem;
+  padding: 1px 5px;
+}
+.fire-badge {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  font-family: monospace; /* Alignement propre des chiffres */
+  font-size: 0.65rem;
+  padding: 1px 5px;
+}
+
+/* Boutons Play/Pause compacts et icônes uniquement */
 .btn-play {
-  background: #3b82f6;
-  width: 64px;
-  padding: 6px 4px;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 6px;
-  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
   font-weight: bold;
   cursor: pointer;
-  font-size: 0.75rem;
   flex-shrink: 0;
+  transition:
+    transform 0.15s ease,
+    background 0.2s ease;
 }
-.btn-play:hover {
-  background: #2563eb;
+.btn-play:active {
+  transform: scale(0.92);
 }
-.slider {
-  flex-grow: 1;
-  accent-color: #f59e0b;
+.wind-btn {
+  background: #38bdf8;
+  color: #0f172a;
+}
+.wind-btn:hover {
+  background: #0284c7;
+  color: #fff;
+}
+.fire-btn {
+  background: #f59e0b;
+  color: #0f172a;
+}
+.fire-btn:hover {
+  background: #d97706;
+  color: #fff;
+}
+
+/* Customisation des Sliders */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
   cursor: pointer;
-  height: 22px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease;
+}
+
+#wind-slider::-webkit-slider-thumb {
+  background: #38bdf8;
+}
+#wind-slider::-moz-range-thumb {
+  background: #38bdf8;
+}
+#time-slider::-webkit-slider-thumb {
+  background: #f59e0b;
+}
+#time-slider::-moz-range-thumb {
+  background: #f59e0b;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover,
+input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* ======================================================
+   5. TERMINAL LOGS & COMPOSANTS LEAFLET
+   ====================================================== */
+.terminal-log {
+  position: absolute;
+  top: 12px;
+  right: 250px;
+  z-index: 1000;
+  border-radius: 8px;
+  padding: 6px 8px;
+  width: 250px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.65rem;
+  line-height: 1.4;
+  color: #38bdf8;
+}
+
+.aircraft-icon {
+  background: transparent;
+  border: none;
+}
+.plane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center;
 }
 
 .leaflet-popup-content {
@@ -220,121 +382,296 @@ body {
   border-radius: 8px;
 }
 
-/* --- Adaptation mobile / petits écrans --- */
+/* ======================================================
+   6. RESPONSIVE / PETITS ÉCRANS
+   ====================================================== */
 @media (max-width: 640px) {
   .info-card {
     width: 44vw;
-    max-width: 200px;
+    max-width: 190px;
     right: 8px;
-    font-size: 0.68rem;
-    padding: 6px 12px;
-    top: 46px;
-    font-size: 0.68rem;
+    top: 45px;
+    padding: 6px 8px;
   }
-  .info-card h3 {
-    font-size: 0.72rem;
-  }
-  .legend {
-    font-size: 0.6rem;
-    gap: 3px;
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-  }
-  .last-update-banner {
-    padding: 6px 12px;
-    top: 8px;
-  }
-  .timeline-card {
-    width: 94%;
-    padding: 8px 10px;
-    bottom: 10px;
-  }
-  .btn-play {
-    width: 54px;
-    font-size: 0.68rem;
+
+  .terminal-log {
+    top: auto;
+    bottom: 110px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 80px;
   }
 }
 
 @media (max-height: 480px) {
   .info-card {
     display: none;
-  } /* évite l'encombrement en paysage sur petit mobile */
+  }
 }
 
-/* --- Ajout : mini-terminal de logs de chargement API --- */
-.terminal-log {
-  position: absolute;
-  top: 12px;
-  right: 262px;
-  z-index: 1000;
-  background: rgba(2, 6, 23, 0.92);
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 8px 10px;
-  width: 260px;
-  max-height: 160px;
-  overflow-y: auto;
-  font-family: monospace;
-  font-size: 0.65rem;
-  line-height: 1.5;
+.leaflet-right {
+  display: block;
+  z-index: 100;
+}
+
+/* ======================================================
+   7. STYLISATION DU CONTRÔLE DE COUCHES LEAFLET (LAYERS)
+   ====================================================== */
+
+/* --- PAR DÉFAUT (DESKTOP) : Sous la carte d'info --- */
+.leaflet-top.leaflet-right {
+  top: 186px !important;
+  right: 12px !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: 1001 !important;
+}
+
+/* Surcharger le style du conteneur Glassmorphism */
+.leaflet-control-layers {
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  color: #f8fafc !important;
+  padding: 6px 10px !important;
+  font-family: inherit !important;
+  font-size: 0.72rem !important;
+  margin: 0 !important;
+  width: max-content;
+}
+
+/* Masquer l'icône d'origine et forcer l'affichage déplié */
+.leaflet-control-layers-toggle {
+  display: none !important;
+}
+.leaflet-control-layers-list {
+  display: block !important;
+  height: auto !important;
+}
+
+/* Éléments internes (Radios & Checkboxes) */
+.leaflet-control-layers-base label,
+.leaflet-control-layers-overlays label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-bottom: 3px !important;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.leaflet-control-layers-overlays label:last-child {
+  margin-bottom: 0 !important;
+}
+.leaflet-control-layers-base label:hover,
+.leaflet-control-layers-overlays label:hover {
   color: #38bdf8;
-  transition: opacity 0.4s ease;
-}
-.term-caret {
-  display: inline-block;
-  animation: term-blink 1s step-end infinite;
-}
-@keyframes term-blink {
-  50% {
-    opacity: 0;
-  }
 }
 
+.leaflet-control-layers-separator {
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  margin: 4px 0 !important;
+}
+
+.leaflet-control-layers-selector {
+  accent-color: #38bdf8;
+  width: 12px;
+  height: 12px;
+  margin: 0 !important;
+  cursor: pointer;
+}
+
+/* --- ADAPTATION RESPONSIVE (MOBILES & TABLETTES) --- */
 @media (max-width: 640px) {
-  .terminal-log {
-    top: auto;
-    bottom: 96px;
-    left: 8px;
-    right: 8px;
-    width: auto;
-    max-height: 100px;
+  .leaflet-top.leaflet-right {
+    top: 210px !important;
+    right: 8px !important;
+  }
+
+  .leaflet-control-layers {
+    padding: 5px 8px !important;
+    font-size: 0.65rem !important;
+  }
+
+  .leaflet-control-layers-selector {
+    width: 10px;
+    height: 10px;
   }
 }
 
-.aircraft-icon {
-  background: transparent;
-  border: none;
+/* En cas de mode paysage très plat (mobile horizontal) */
+@media (max-height: 480px) {
+  .leaflet-top.leaflet-right {
+    top: 12px !important; /* Si la carte d'info disparaît, on remonte en haut */
+  }
 }
 
-.plane {
+/* ======================================================
+   8. BOUTON TOGGLE & MASQUAGE DU PANNEAU DE COUCHES
+   ====================================================== */
+
+/* Bouton d'action pour ouvrir/fermer le panneau */
+.layers-toggle-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  transform-origin: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: #f8fafc;
+  font-size: 0.72rem;
+  padding-bottom: 2px;
 }
 
-.wind-arrow {
-  font-size: 24px;
-  color: #008cff;
-  opacity: 0.75;
-  font-weight: bold;
-  text-shadow: 0 1px 3px white;
+.layers-toggle-header:hover {
+  color: #38bdf8;
 }
 
-.wind-control {
-  background: white;
+/* Flèche d'indication d'état */
+.layers-toggle-icon {
+  font-size: 0.65rem;
+  transition: transform 0.2s ease;
+}
 
-  padding: 10px;
+/* Classe CSS appliquée par le JS pour cacher la liste */
+.leaflet-control-layers-list.is-collapsed {
+  display: none !important;
+}
 
+.layers-toggle-icon.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+/* ======================================================
+   9. STYLISATION DE LA POPUP AÉRONEF (GLASSMORPHISM)
+   ====================================================== */
+
+/* Conteneur principal de la popup Leaflet */
+.leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.9) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
+  color: #f8fafc !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+/* Flèche sous la popup */
+.leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.9) !important;
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+  box-shadow: none !important;
+}
+
+/* Bouton de fermeture (X) */
+.leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  font-size: 16px !important;
+  padding: 8px 10px 0 0 !important;
+  transition: color 0.2s ease;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #38bdf8 !important;
+}
+
+/* Contenu interne de la popup */
+.leaflet-popup-content {
+  margin: 0 !important;
+  width: 220px !important; /* Élargi pour une meilleure lisibilité */
+  font-family: inherit !important;
+  font-size: 0.75rem !important;
+}
+
+/* --- STRUCTURE INTERNE DU CARD AVION --- */
+
+/* En-tête de l'avion (Indicatif/Callsign) */
+.aircraft-popup-header {
+  background: rgba(56, 189, 248, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.aircraft-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.aircraft-tag {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Corps de la popup */
+.aircraft-popup-body {
+  padding: 10px 12px;
+}
+
+/* Grille de métadonnées */
+.aircraft-info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+}
+
+.aircraft-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.aircraft-value {
+  color: #f8fafc;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bloc Télémétrie (Altitude, Vitesse, Cap) */
+.aircraft-telemetry {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
-
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-
-  font-size: 14px;
+  padding: 6px;
+  text-align: center;
 }
 
-.wind-control input {
-  width: 220px;
+.telemetry-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.telemetry-label {
+  font-size: 0.6rem;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.telemetry-value {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f1f5f9;
 }
