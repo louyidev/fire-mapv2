@@ -1,6 +1,6 @@
 import { aircraftLayer } from "./map.js";
 
-const ADSB_API = "https://square-frog-f706.louyidev.workers.dev/";
+const ADSB_URL = "https://square-frog-f706.louyidev.workers.dev/adsb";
 
 function createAircraftIcon(category) {
   let emoji = "✈️";
@@ -46,7 +46,7 @@ export async function loadAircrafts() {
   aircraftLoading = true;
 
   try {
-    const response = await fetch(ADSB_API, {
+    const response = await fetch(ADSB_URL, {
       cache: "no-store",
     });
 
