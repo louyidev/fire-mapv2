@@ -2,25 +2,28 @@ import { map, windLayer } from "./map.js";
 
 const WEATHER_PROXY = "https://square-frog-f706.louyidev.workers.dev/weather";
 
+const WIND_GRID = {
+  minLat: 43,
+  maxLat: 46,
+  minLng: -2,
+  maxLng: 2,
+  step: 0.5,
+};
+
 let windPoints = [];
-
-let currentHour = 0;
-
-let sliderControl = null;
+let windMarkers = [];
 
 export async function loadWind() {
-  console.log("🌬️ Chargement vent Météo-France");
+  console.log("🌬️ Chargement du vent");
 
   try {
-    const points = generateFireGrid();
+    const points = generateWindGrid();
 
-    const results = await Promise.all(points.map(loadPointWind));
+    const results = await Promise.all(points.map(fetchWind));
 
     windPoints = results.filter(Boolean);
 
-    console.log(`🌬️ ${windPoints.length} points vent chargés`);
-
-    createSlider();
+    console.log(`🌬️ ${windPoints.length} vents chargés`);
 
     drawWind();
 
@@ -30,50 +33,61 @@ export async function loadWind() {
   }
 }
 
-async function loadPointWind(point) {
+async function fetchWind(point) {
   try {
     const response = await fetch(
       `${WEATHER_PROXY}?lat=${point.lat}&lng=${point.lng}`,
     );
 
     if (!response.ok) {
-      console.warn("Météo indisponible", point);
-
       return null;
     }
 
     const data = await response.json();
+
+    console.log("Vent reçu", point, data);
+
+    const speed = Number(data.speed ?? data.wind_speed_10m ?? data.windSpeed);
+
+    const direction = Number(
+      data.direction ?? data.wind_direction_10m ?? data.windDirection,
+    );
+
+    if (!Number.isFinite(speed) || !Number.isFinite(direction)) {
+      console.warn("Vent invalide", data);
+
+      return null;
+    }
 
     return {
       lat: point.lat,
 
       lng: point.lng,
 
-      speed: data.speed,
+      speed,
 
-      direction: data.direction,
+      direction,
     };
   } catch (error) {
-    console.error("Erreur météo point", error);
+    console.error("Erreur récupération vent", error);
 
     return null;
   }
 }
 
-function generateFireGrid() {
-  /*
-    Grille légère France.
-    Avant :
-    651 appels Open Meteo ❌
-
-    Maintenant :
-    25 points météo ✅
-  */
-
+function generateWindGrid() {
   const points = [];
 
-  for (let lat = 42; lat <= 50; lat += 2) {
-    for (let lng = -4; lng <= 8; lng += 2) {
+  for (
+    let lat = WIND_GRID.minLat;
+    lat <= WIND_GRID.maxLat;
+    lat += WIND_GRID.step
+  ) {
+    for (
+      let lng = WIND_GRID.minLng;
+      lng <= WIND_GRID.maxLng;
+      lng += WIND_GRID.step
+    ) {
       points.push({
         lat,
         lng,
@@ -85,96 +99,118 @@ function generateFireGrid() {
 }
 
 function drawWind() {
-  windLayer.clearLayers();
+  clearMarkers();
 
-  if (map.getZoom() < 5) {
+  if (map.getZoom() < 7) {
     return;
   }
 
   windPoints.forEach((point) => {
-    if (point.direction === undefined || point.speed === undefined) {
-      return;
-    }
-
-    const icon = L.divIcon({
-      className: "wind-arrow",
-
-      html: `
-        <div
-          style="
-            transform:rotate(${point.direction}deg);
-            font-size:24px;
-            color:#008cff;
-            opacity:.7;
-            font-weight:bold;
-          "
-        >
-          ➤
-        </div>
-        `,
-
-      iconSize: [25, 25],
-    });
-
-    L.marker(
+    const marker = L.marker(
       [point.lat, point.lng],
 
       {
-        icon,
+        icon: createWindIcon(point),
         interactive: true,
       },
-    )
+    );
 
-      .bindPopup(
-        `
-      🌬️ Vent<br>
+    marker.bindPopup(createWindPopup(point));
 
-      Vitesse :
-      ${point.speed} km/h
+    marker.addTo(windLayer);
 
-      <br>
-
-      Direction :
-      ${point.direction}°
-
-      `,
-      )
-
-      .addTo(windLayer);
+    windMarkers.push(marker);
   });
 }
 
-function createSlider() {
-  if (sliderControl) {
-    return;
-  }
+function createWindPopup(point) {
+  return `
 
-  sliderControl = L.control({
-    position: "bottomleft",
+    <strong>🌬️ Vent</strong>
+
+    <br><br>
+
+    💨 Vitesse :
+    ${point.speed.toFixed(1)}
+    km/h
+
+
+    <br>
+
+
+    🧭 Direction :
+    ${point.direction}°
+    
+
+    <br>
+
+
+    ➡️ Souffle vers :
+    ${getDirectionName(point.direction + 180)}
+
+  `;
+}
+
+function createWindIcon(point) {
+  /*
+    Les API météo indiquent
+    la provenance du vent.
+
+    Exemple :
+    270° = vent venant de l'ouest
+
+    Donc la flèche doit partir
+    vers l'est.
+  */
+
+  const rotation = point.direction + 180;
+
+  const size = point.speed > 30 ? 32 : point.speed > 15 ? 26 : 22;
+
+  return L.divIcon({
+    className: "wind-arrow",
+
+    html: `
+
+      <div
+        style="
+          transform:
+          rotate(${rotation}deg);
+          font-size:${size}px;
+        "
+      >
+        ➤
+      </div>
+
+    `,
+
+    iconSize: [size, size],
+
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+function getDirectionName(degree) {
+  const directions = [
+    "Nord",
+    "Nord-Est",
+    "Est",
+    "Sud-Est",
+    "Sud",
+    "Sud-Ouest",
+    "Ouest",
+    "Nord-Ouest",
+  ];
+
+  const index = Math.round(degree / 45) % 8;
+
+  return directions[index];
+}
+
+function clearMarkers() {
+  windMarkers.forEach((marker) => {
+    windLayer.removeLayer(marker);
   });
 
-  sliderControl.onAdd = function () {
-    const div = L.DomUtil.create("div", "wind-slider");
-
-    div.innerHTML = `
-
-    <div style="
-      background:white;
-      padding:12px;
-      border-radius:8px;
-      box-shadow:0 0 8px #999;
-    ">
-
-    🌬️ Vent temps réel
-
-    </div>
-
-    `;
-
-    L.DomEvent.disableClickPropagation(div);
-
-    return div;
-  };
-
-  sliderControl.addTo(map);
+  windMarkers = [];
 }
