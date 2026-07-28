@@ -74,3 +74,13 @@ export function updateLastUpdate(date) {
 
   banner.style.display = "flex";
 }
+
+export function updateStatus(message) {
+  const status = document.getElementById("status");
+
+  if (!status) {
+    return;
+  }
+
+  status.textContent = message;
+}
