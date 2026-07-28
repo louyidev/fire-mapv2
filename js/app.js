@@ -3,36 +3,20 @@ import { loadAircrafts } from "./aircrafts.js";
 import { loadWind } from "./wind.js";
 import "./ui.js";
 
-
 let aircraftInterval = null;
 
-
-async function start(){
-
+async function start() {
   await loadFires();
 
   await loadWind();
 
   await loadAircrafts();
 
-
-  if(!aircraftInterval){
-
-    aircraftInterval =
-      setInterval(
-        () => loadAircrafts(),
-        10000
-      );
-
+  if (!aircraftInterval) {
+    aircraftInterval = setInterval(() => loadAircrafts(), 10000);
   }
-
 }
 
-
-window.addEventListener(
-  "load",
-  start,
-  {
-    once:true
-  }
-);
+window.addEventListener("load", start, {
+  once: true,
+});

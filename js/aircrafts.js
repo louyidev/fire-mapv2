@@ -117,7 +117,10 @@ function renderAircrafts(aircrafts) {
         icon: createAircraftIcon(aircraft.category),
       });
 
-      marker.bindPopup("");
+      marker.bindPopup("", {
+        maxWidth: 240,
+        minWidth: 220,
+      });
 
       marker.addTo(aircraftLayer);
 
@@ -169,35 +172,51 @@ function renderAircrafts(aircrafts) {
 }
 
 function createPopup(aircraft) {
-  return `
+  // Conversion : 1 nœud (kt) = 1.852 km/h
+  const speedKmh =
+    aircraft.speed != null ? Math.round(aircraft.speed * 1.852) : "?";
+  const altitudeFt =
+    aircraft.altitude != null ? Math.round(aircraft.altitude) : "?";
 
-    <b>${aircraft.callsign || "Inconnu"}</b><br>
-    Compagnie :
-    ${aircraft.airline || "Inconnue"}
-    <br><br>
-    Constructeur :
-    ${aircraft.manufacturer || "Inconnu"}
-    <br>
-    Modèle :
-    ${aircraft.model || "Inconnu"}
-    <br>
-    Type ICAO :
-    ${aircraft.type || "?"}
-    <br>
-    Immatriculation :
-    ${aircraft.registration || "?"}    
-    <br>
-    Catégorie :
-    ${aircraft.category || "Autre"}
-    <br><br>
-    Altitude :
-    ${aircraft.altitude != null ? Math.round(aircraft.altitude) : "?"} ft
-    <br>
-    Vitesse :
-    ${aircraft.speed != null ? Math.round(aircraft.speed) : "?"} kt
-    <br>
-    Cap :
-    ${aircraft.track ?? "?"}°
+  return `
+    <div class="aircraft-popup-header">
+      <span class="aircraft-title">${aircraft.callsign || "Inconnu"}</span>
+      <span class="aircraft-tag">${aircraft.category || "Autre"}</span>
+    </div>
+
+    <div class="aircraft-popup-body">
+      <div class="aircraft-info-grid">
+        <span class="aircraft-label">Compagnie</span>
+        <span class="aircraft-value">${aircraft.airline || "Inconnue"}</span>
+        
+        <span class="aircraft-label">Constructeur</span>
+        <span class="aircraft-value">${aircraft.manufacturer || "Inconnu"}</span>
+
+        <span class="aircraft-label">Modèle</span>
+        <span class="aircraft-value">${aircraft.model || "Inconnu"}</span>
+
+        <span class="aircraft-label">Type ICAO</span>
+        <span class="aircraft-value">${aircraft.type || "?"}</span>
+
+        <span class="aircraft-label">Immatriculation</span>
+        <span class="aircraft-value">${aircraft.registration || "?"}</span>
+      </div>
+
+      <div class="aircraft-telemetry">
+        <div class="telemetry-item">
+          <span class="telemetry-label">ALT</span>
+          <span class="telemetry-value">${altitudeFt} ft</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">VIT</span>
+          <span class="telemetry-value">${speedKmh} km/h</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">CAP</span>
+          <span class="telemetry-value">${aircraft.track ?? "?"}°</span>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -252,6 +271,109 @@ function animateAircraft(marker, fromLat, fromLon, toLat, toLon, track) {
   const animation = requestAnimationFrame(move);
 
   aircraftAnimations.set(id, animation);
+}
+
+function classifyAircraft(type, callsign) {
+  if (!type && !callsign) {
+    return "Inconnu";
+  }
+
+  const t = (type ?? "").toUpperCase();
+  const c = (callsign ?? "").toUpperCase();
+
+  // Sécurité Civile Dash bombardier d'eau
+  if (c.startsWith("MILAN") || t.includes("DH8D")) {
+    return "🚒 Feu";
+  }
+
+  // Hélicoptères
+  if (
+    t.includes("PUMA") ||
+    c.includes("PUMA") ||
+    t.includes("AS32") ||
+    t.includes("AS33") ||
+    t.includes("AS53") ||
+    t.includes("EC45") ||
+    t.includes("H145")
+  ) {
+    return "🚁 Hélicoptère";
+  }
+
+  // Canadair
+  if (t.includes("CL") || t.includes("AT8") || t.includes("AT6")) {
+    return "🚒 Feu";
+  }
+
+  if (t.includes("A400") || t.includes("C130")) {
+    return "🪖 Militaire";
+  }
+
+  if (t.startsWith("A3") || t.startsWith("B7") || t.startsWith("B8")) {
+    return "✈️ Commercial";
+  }
+
+  return "Autre";
+}
+
+function detectFireAircraft(aircraft) {
+  const speed = aircraft.speed ?? 0;
+  const altitude = aircraft.altitude ?? 0;
+
+  return speed > 60 && speed < 180 && altitude < 5000;
+}
+
+function aircraftIconFor(category) {
+  switch (category) {
+    case "🚒 Feu":
+      return "🚒";
+
+    case "🪖 Militaire":
+      return "🪖";
+
+    case "✈️ Commercial":
+      return "✈️";
+
+    default:
+      return "•";
+  }
+}
+
+function getAirline(callsign, registration) {
+  if (callsign) {
+    const prefix = callsign.substring(0, 3).toUpperCase();
+
+    if (AIRLINES[prefix]) {
+      return AIRLINES[prefix];
+    }
+  }
+
+  if (registration) {
+    if (registration.startsWith("G-")) {
+      return "Royaume-Uni (compagnie inconnue)";
+    }
+
+    if (registration.startsWith("F-")) {
+      return "France (compagnie inconnue)";
+    }
+
+    if (registration.startsWith("D-")) {
+      return "Allemagne (compagnie inconnue)";
+    }
+  }
+
+  return "Inconnue";
+}
+
+function calculatePreviousPosition(aircraft) {
+  const distance = ((aircraft.speed ?? 200) / 3600) * 5;
+
+  const angle = ((aircraft.track ?? 0) * Math.PI) / 180;
+
+  return {
+    lat: aircraft.lat - (Math.cos(angle) * distance) / 111,
+
+    lon: aircraft.lon - (Math.sin(angle) * distance) / 111,
+  };
 }
 
 function getAircraftInfo(type) {
@@ -365,109 +487,6 @@ function getAircraftInfo(type) {
   return {
     manufacturer: "Inconnu",
     model: type,
-  };
-}
-
-function classifyAircraft(type, callsign) {
-  if (!type && !callsign) {
-    return "Inconnu";
-  }
-
-  const t = (type ?? "").toUpperCase();
-  const c = (callsign ?? "").toUpperCase();
-
-  // Sécurité Civile Dash bombardier d'eau
-  if (c.startsWith("MILAN") || t.includes("DH8D")) {
-    return "🚒 Feu";
-  }
-
-  // Hélicoptères
-  if (
-    t.includes("PUMA") ||
-    c.includes("PUMA") ||
-    t.includes("AS32") ||
-    t.includes("AS33") ||
-    t.includes("AS53") ||
-    t.includes("EC45") ||
-    t.includes("H145")
-  ) {
-    return "🚁 Hélicoptère";
-  }
-
-  // Canadair
-  if (t.includes("CL") || t.includes("AT8") || t.includes("AT6")) {
-    return "🚒 Feu";
-  }
-
-  if (t.includes("A400") || t.includes("C130")) {
-    return "🪖 Militaire";
-  }
-
-  if (t.startsWith("A3") || t.startsWith("B7") || t.startsWith("B8")) {
-    return "✈️ Commercial";
-  }
-
-  return "Autre";
-}
-
-function detectFireAircraft(aircraft) {
-  const speed = aircraft.speed ?? 0;
-  const altitude = aircraft.altitude ?? 0;
-
-  return speed > 60 && speed < 180 && altitude < 5000;
-}
-
-function aircraftIconFor(category) {
-  switch (category) {
-    case "🚒 Feu":
-      return "🚒";
-
-    case "🪖 Militaire":
-      return "🪖";
-
-    case "✈️ Commercial":
-      return "✈️";
-
-    default:
-      return "•";
-  }
-}
-
-function getAirline(callsign, registration) {
-  if (callsign) {
-    const prefix = callsign.substring(0, 3).toUpperCase();
-
-    if (AIRLINES[prefix]) {
-      return AIRLINES[prefix];
-    }
-  }
-
-  if (registration) {
-    if (registration.startsWith("G-")) {
-      return "Royaume-Uni (compagnie inconnue)";
-    }
-
-    if (registration.startsWith("F-")) {
-      return "France (compagnie inconnue)";
-    }
-
-    if (registration.startsWith("D-")) {
-      return "Allemagne (compagnie inconnue)";
-    }
-  }
-
-  return "Inconnue";
-}
-
-function calculatePreviousPosition(aircraft) {
-  const distance = ((aircraft.speed ?? 200) / 3600) * 5;
-
-  const angle = ((aircraft.track ?? 0) * Math.PI) / 180;
-
-  return {
-    lat: aircraft.lat - (Math.cos(angle) * distance) / 111,
-
-    lon: aircraft.lon - (Math.sin(angle) * distance) / 111,
   };
 }
 
