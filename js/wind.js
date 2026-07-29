@@ -44,11 +44,38 @@ export async function loadWind() {
 
     setupWindSlider();
 
-    // ⚡ Affiche directement la date/heure de l'index 0 au chargement
-    updateWindTime(0);
+    // ⚡ Trouve l'index correspondant à l'heure actuelle
+    const initialIndex = findCurrentHourIndex();
+    updateWindTime(initialIndex);
   } catch (error) {
     console.error("Erreur chargement vent", error);
   }
+}
+
+// ------------------------------------------------------
+// Recherche de l'heure actuelle
+// ------------------------------------------------------
+
+function findCurrentHourIndex() {
+  const timeList = windDataPoints[0]?.hourly?.time;
+  if (!timeList || timeList.length === 0) return 0;
+
+  const now = new Date();
+
+  // Cherche le créneau le plus proche de maintenant
+  let closestIndex = 0;
+  let smallestDiff = Infinity;
+
+  timeList.forEach((timeStr, index) => {
+    const timeDate = new Date(timeStr);
+    const diff = Math.abs(now - timeDate);
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      closestIndex = index;
+    }
+  });
+
+  return closestIndex;
 }
 
 // ------------------------------------------------------
@@ -179,15 +206,15 @@ function drawWindyEffect() {
       "rgba(255, 235, 0, 0.95)",
       "rgba(255, 140, 0, 0.95)",
       "rgba(255, 30, 0, 1.0)",
-      "rgba(180, 0, 255, 1.0)"
+      "rgba(180, 0, 255, 1.0)",
     ],
 
     velocityScale: dynamicVelocityScale,
 
     // --- 🎯 RÉGLAGES DE VISIBILITÉ ET ÉPAISSEUR ---
-    particleAge: 25,              // Tracés légèrement plus longs
-    particleMultiplier: 1 / 800,  // Densité réajustée
-    lineWidth: 2.5,               // ✏️ Épaisseur augmentée (1.5 -> 2.5)
+    particleAge: 25,
+    particleMultiplier: 1 / 800,
+    lineWidth: 2.5,
     frameRate: 30,
   });
 
