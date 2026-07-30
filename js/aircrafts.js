@@ -23,19 +23,19 @@ function createAircraftIcon(aircraft) {
   const c = (aircraft?.callsign ?? "").toUpperCase();
   const category = aircraft?.category ?? "";
 
-  let iconPath = "/assets/commercial.svg";
+  let iconPath = "./assets/commercial.svg";
 
   // 1. Canadair (CL-215, CL-415, etc.)
   if (t.startsWith("CL")) {
-    iconPath = "/assets/canadair.svg";
+    iconPath = "./assets/canadair.svg";
   }
   // 2. Dash 8 (DH8D / Q400 bombardier d'eau ou transport)
   else if (t.includes("DH8D") || c.startsWith("MILAN")) {
-    iconPath = "/assets/dash.svg";
+    iconPath = "./assets/dash.svg";
   }
   // 3. Air Tractor (AT802, AT602, AT75, etc.)
   else if (t.startsWith("AT8") || t.startsWith("AT6") || t.startsWith("AT7")) {
-    iconPath = "/assets/airtractor.svg";
+    iconPath = "./assets/airtractor.svg";
   }
   // 4. Hélicoptères (basé sur la catégorie ou le type ICAO/callsign)
   else if (
@@ -47,7 +47,7 @@ function createAircraftIcon(aircraft) {
     t.includes("EC45") ||
     t.includes("H145")
   ) {
-    iconPath = "/assets/helicopter.svg";
+    iconPath = "./assets/helicopter.svg";
   }
   // 5. Avions militaires (A400M, C-130 Hercules, Transall, Chasseurs, etc.)
   else if (
@@ -62,7 +62,7 @@ function createAircraftIcon(aircraft) {
     c.startsWith("FAF") ||
     c.startsWith("COTAM")
   ) {
-    iconPath = "/assets/military.svg";
+    iconPath = "./assets/military.svg";
   }
 
   return L.divIcon({
