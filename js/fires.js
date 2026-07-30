@@ -1,12 +1,20 @@
 import { canvasRenderer, fireLayer } from "./map.js";
 
-import {
-  termLog,
-  updateLastFireUpdate,
-  updateStatus,
-} from "./ui.js";
+import { termLog, updateLastFireUpdate, updateStatus } from "./ui.js";
 
 const NASA_API_KEY = "d9fe3ef6c297fec40b61f84714b55a56";
+
+// 🚀 LOGO NASA STYLISÉ (SVG)
+const NASA_LOGO_SVG = `
+<svg class="nasa-logo" viewBox="0 0 192 159" width="22" height="18" style="vertical-align: middle; filter: drop-shadow(0px 1px 2px rgba(0,0,0,0.5));">
+  <g fill="none" fill-rule="evenodd">
+    <ellipse cx="95.5" cy="79.5" rx="72.5" ry="72.5" fill="#0B3D91"/>
+    <path fill="#FFF" d="M49 88.5l10-34h12l10 34h-9l-2-8H59l-2 8h-8zm12-15h7l-3.5-13L61 73.5zm27.5 15V54.5h11l9.5 21v-21h8.5v34h-10l-10.5-22.5v22.5h-8.5zm34 0l10-34h12l10 34h-9l-2-8h-11l-2 8h-8zm12-15h7l-3.5-13-3.5 13z"/>
+    <path stroke="#E03C31" stroke-width="6.5" stroke-linecap="round" d="M22 105c35-45 110-80 150-50M22 105c45 10 115 5 150-50"/>
+    <ellipse cx="95.5" cy="79.5" rx="72.5" ry="30" stroke="#FFF" stroke-width="3" transform="rotate(-22 95.5 79.5)"/>
+  </g>
+</svg>
+`;
 
 let allFires = [];
 let timeSteps = [];
@@ -78,51 +86,63 @@ function radiusFor(category, frp) {
   const base = Math.min(Math.max(frp * 0.45, 7), 18);
 
   switch (category) {
-    case "c1": return base;
-    case "c2": return base - 1;
-    case "c3": return base - 2;
-    case "c4": return 7;
-    case "c5": return 6;
-    case "c6": return 5;
-    case "c7": return 4;
-    default: return 3;
+    case "c1":
+      return base;
+    case "c2":
+      return base - 1;
+    case "c3":
+      return base - 2;
+    case "c4":
+      return 7;
+    case "c5":
+      return 6;
+    case "c6":
+      return 5;
+    case "c7":
+      return 4;
+    default:
+      return 3;
   }
 }
 
-// Générateur du template HTML Glassmorphism / Dark Mode
+// Générateur du template HTML Glassmorphism / Dark Mode avec Logo NASA
 function buildFirePopupContent(fire, category) {
   const categoryLabel = CATEGORY_LABELS[category] || category;
 
+  // --- Traduction / Nettoyage de la confiance ---
+  let formattedConfidence = "N/A";
+  if (
+    fire.confidence !== undefined &&
+    fire.confidence !== null &&
+    fire.confidence !== "N/A"
+  ) {
+    const confStr = String(fire.confidence).trim().toLowerCase();
+    if (confStr === "l" || confStr === "low") formattedConfidence = "Faible";
+    else if (confStr === "n" || confStr === "nominal")
+      formattedConfidence = "Moyenne";
+    else if (confStr === "h" || confStr === "high")
+      formattedConfidence = "Élevée";
+    else if (!isNaN(confStr)) formattedConfidence = `${confStr}%`;
+    else formattedConfidence = confStr.toUpperCase();
+  }
+
+  // --- Nom exact du satellite ---
+  const exactSatellite = getFullSatelliteName(fire.satellite, fire.source);
+
   return `
-    <div class="fire-popup-header">
-      <span class="fire-title">🔥 Incendie NASA</span>
+    <div class="fire-popup-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        ${NASA_LOGO_SVG}
+        <span class="fire-title" style="font-weight: bold;">Détection Satellite NASA</span>
+      </div>
       <span class="fire-tag">${categoryLabel}</span>
     </div>
 
     <div class="fire-popup-body">
-      <div class="fire-info-grid">
-        <span class="fire-label">Luminosité</span>
-        <span class="fire-value">${fire.brightness || "N/A"} K</span>
-
-        <span class="fire-label">Confiance</span>
-        <span class="fire-value">${fire.confidence || "N/A"}${fire.confidence && !String(fire.confidence).includes("%") ? "%" : ""}</span>
-
-        <span class="fire-label">Date & Heure</span>
-        <span class="fire-value">${fire.formattedDateTime} UTC</span>
-
-        <span class="fire-label">Passage</span>
-        <span class="fire-value">${fire.daynight === "D" ? "Jour ☀️" : fire.daynight === "N" ? "Nuit 🌙" : (fire.daynight || "N/A")}</span>
-
-        <span class="fire-label">Source / Sat</span>
-        <span class="fire-value">${fire.satellite || fire.source}</span>
-
-        <span class="fire-label">Coordonnées</span>
-        <span class="fire-value">${fire.lat.toFixed(4)}, ${fire.lng.toFixed(4)}</span>
-      </div>
-
-      <div class="fire-telemetry">
+      <!-- 1. MÉTRIQUES CLÉS -->
+      <div class="fire-telemetry" style="margin-bottom: 12px;">
         <div class="telemetry-item">
-          <span class="telemetry-label">FRP</span>
+          <span class="telemetry-label">FRP (Puissance)</span>
           <span class="telemetry-value">${fire.frp} MW</span>
         </div>
         <div class="telemetry-item">
@@ -133,6 +153,27 @@ function buildFirePopupContent(fire, category) {
           <span class="telemetry-label">LNG</span>
           <span class="telemetry-value">${fire.lng.toFixed(2)}°</span>
         </div>
+      </div>
+
+      <!-- 2. DÉTAILS DU FOYER -->
+      <div class="fire-info-grid">
+        <span class="fire-label">Satellite capteur</span>
+        <span class="fire-value" style="font-weight: 600; color: #ffca28;">${exactSatellite}</span>
+
+        <span class="fire-label">Date & Heure</span>
+        <span class="fire-value">${fire.formattedDateTime} UTC</span>
+
+        <span class="fire-label">Confiance</span>
+        <span class="fire-value">${formattedConfidence}</span>
+
+        <span class="fire-label">Luminosité</span>
+        <span class="fire-value">${fire.brightness || "N/A"} K</span>
+
+        <span class="fire-label">Passage</span>
+        <span class="fire-value">${fire.daynight === "D" ? "Jour ☀️" : fire.daynight === "N" ? "Nuit 🌙" : fire.daynight || "N/A"}</span>
+
+        <span class="fire-label">Coordonnées exactes</span>
+        <span class="fire-value">${fire.lat.toFixed(4)}, ${fire.lng.toFixed(4)}</span>
       </div>
     </div>
   `;
@@ -165,10 +206,16 @@ async function fetchCsv(url, name) {
       const lng = Number(row[headers.indexOf("longitude")]);
       const frp = Number(row[headers.indexOf("frp")]) || 1;
       const date = row[headers.indexOf("acq_date")];
-      const time = (row[headers.indexOf("acq_time")] || "0000").padStart(4, "0");
+      const time = (row[headers.indexOf("acq_time")] || "0000").padStart(
+        4,
+        "0",
+      );
 
       // Données optionnelles NASA CSV
-      const brightness = row[headers.indexOf("brightness")] || row[headers.indexOf("bright_ti4")] || "N/A";
+      const brightness =
+        row[headers.indexOf("brightness")] ||
+        row[headers.indexOf("bright_ti4")] ||
+        "N/A";
       const confidence = row[headers.indexOf("confidence")] || "N/A";
       const daynight = row[headers.indexOf("daynight")] || "N/A";
       const satellite = row[headers.indexOf("satellite")] || name;
@@ -178,7 +225,7 @@ async function fetchCsv(url, name) {
       }
 
       const dateObj = new Date(
-        `${date}T${time.substring(0, 2)}:${time.substring(2)}:00Z`
+        `${date}T${time.substring(0, 2)}:${time.substring(2)}:00Z`,
       );
 
       result.push({
@@ -229,7 +276,7 @@ export async function loadFires() {
   ];
 
   const results = await Promise.all(
-    sources.map((s) => fetchCsv(s.url, s.name))
+    sources.map((s) => fetchCsv(s.url, s.name)),
   );
 
   fireLayer.clearLayers();
@@ -246,7 +293,7 @@ export async function loadFires() {
           timestamp: f.timestamp,
           label: f.formattedDateTime,
         },
-      ])
+      ]),
     ).values(),
   ];
 
@@ -469,6 +516,78 @@ export function initUI() {
     });
   }
 }
+
+/**
+ * Convertit la lettre/code du CSV NASA en nom exact du satellite
+ */
+function getFullSatelliteName(satCode, sourceName) {
+  const sat = String(satCode || "")
+    .trim()
+    .toUpperCase();
+  const source = String(sourceName || "")
+    .trim()
+    .toUpperCase();
+
+  // 1. Détection basée sur la source "VIIRS SNPP"
+  if (source.includes("SNPP")) {
+    return "Suomi NPP (VIIRS)";
+  }
+
+  // 2. Détection basée sur la source "VIIRS NOAA20"
+  if (source.includes("NOAA20") || source.includes("NOAA-20")) {
+    return "NOAA-20 (JPSS-1 / VIIRS)";
+  }
+
+  // 3. Détection basée sur la source "MODIS" (Lettres T ou A)
+  if (source.includes("MODIS")) {
+    if (sat === "T" || sat.includes("TERRA")) return "Terra (EOS / MODIS)";
+    if (sat === "A" || sat.includes("AQUA")) return "Aqua (EOS / MODIS)";
+    return "Terra / Aqua (MODIS)";
+  }
+
+  // 4. Décodage secours par le code direct du satellite
+  switch (sat) {
+    case "NPP":
+    case "SNPP":
+      return "Suomi NPP (VIIRS)";
+    case "N":
+    case "NOAA20":
+    case "NOAA-20":
+    case "1":
+      return "NOAA-20 (JPSS-1 / VIIRS)";
+    case "N21":
+    case "NOAA21":
+    case "2":
+      return "NOAA-21 (JPSS-2 / VIIRS)";
+    case "T":
+      return "Terra (EOS / MODIS)";
+    case "A":
+      return "Aqua (EOS / MODIS)";
+    default:
+      return satCode ? `Satellite (${satCode})` : sourceName || "Inconnu";
+  }
+}
+
+// Dictionnaire d'identification des satellites de détection NASA
+const SATELLITE_NAMES = {
+  // VIIRS / JPSS
+  NOAA20: "NOAA-20 (JPSS-1 / VIIRS)",
+  "NOAA-20": "NOAA-20 (JPSS-1 / VIIRS)",
+  N20: "NOAA-20 (JPSS-1 / VIIRS)",
+  NPP: "Suomi NPP (VIIRS)",
+  SNPP: "Suomi NPP (VIIRS)",
+  VIIRS_SNPP_NRT: "Suomi NPP (VIIRS)",
+  VIIRS_NOAA20_NRT: "NOAA-20 (VIIRS)",
+  NOAA21: "NOAA-21 (JPSS-2 / VIIRS)",
+  N21: "NOAA-21 (JPSS-2 / VIIRS)",
+
+  // MODIS / EOS
+  A: "Aqua (MODIS)",
+  AQUA: "Aqua (MODIS)",
+  T: "Terra (MODIS)",
+  TERRA: "Terra (MODIS)",
+  MODIS_NRT: "Terra / Aqua (MODIS)",
+};
 
 // Initialisation au chargement du module
 initUI();

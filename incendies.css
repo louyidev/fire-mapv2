@@ -585,7 +585,7 @@ input[type="range"]::-moz-range-thumb:hover {
 
 .leaflet-popup-content {
   margin: 0 !important;
-  width: 220px !important;
+  max-width: 286px !important;
   font-family: inherit !important;
   font-size: 0.75rem !important;
 }
@@ -595,7 +595,7 @@ input[type="range"]::-moz-range-thumb:hover {
 .wind-popup-header,
 .fire-popup-header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 10px 12px;
+  padding: 10px 25px 10px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;

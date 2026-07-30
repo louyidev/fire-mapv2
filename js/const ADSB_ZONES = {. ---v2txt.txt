@@ -1,0 +1,198 @@
+const ADSB_ZONES = {
+  "sud-ouest": {
+    lat: 44.84,
+    lon: -0.58,
+    dist: 250,
+  },
+  france: {
+    lat: 46.6,
+    lon: 2.2,
+    dist: 500,
+  },
+};
+
+const WEATHER_URL = "https://api.open-meteo.com/v1/forecast";
+const EFFIS_WFS_URL = "https://effis-gwis-cms.jrc.ec.europa.eu/geoserver/effis/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=effis:effis.ba.current&outputFormat=application/json";
+
+// Cache mémoire Worker
+const adsbCache = new Map();
+const ADSB_CACHE_DURATION = 10000;
+
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    if (path === "/adsb") {
+      return loadAdsb(url);
+    }
+
+    if (path === "/weather") {
+      return loadWeather(url);
+    }
+
+    if (path === "/effis") {
+      return loadEffis();
+    }
+
+    return jsonResponse({ error: "Endpoint inconnu" }, 404);
+  },
+};
+
+// =================================================
+// EFFIS COPERNICUS (Zones Brûlées)
+// =================================================
+
+async function loadEffis() {
+  const cache = caches.default;
+  const cacheRequest = new Request(EFFIS_WFS_URL);
+  const cached = await cache.match(cacheRequest);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(EFFIS_WFS_URL, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`EFFIS HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const responseCache = jsonResponse(data);
+
+    // Mettre en cache 15 minutes (900s) pour éviter de surcharger GeoServer
+    responseCache.headers.set("Cache-Control", "public, max-age=900");
+
+    await cache.put(cacheRequest, responseCache.clone());
+
+    return responseCache;
+  } catch (error) {
+    console.error("Erreur EFFIS", error);
+    return jsonResponse({ error: "EFFIS GeoServer indisponible" }, 503);
+  }
+}
+
+// =================================================
+// ADS-B
+// =================================================
+
+async function loadAdsb(url) {
+  const zone = url.searchParams.get("zone") ?? "sud-ouest";
+  const config = ADSB_ZONES[zone];
+
+  if (!config) {
+    return jsonResponse({ error: "Zone inconnue" }, 400);
+  }
+
+  const cacheKey = zone;
+  const cached = adsbCache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && now - cached.time < ADSB_CACHE_DURATION) {
+    return jsonResponse(cached.data);
+  }
+
+  const apiUrl = `https://api.adsb.lol/v2/lat/${config.lat}/lon/${config.lon}/dist/${config.dist}`;
+
+  try {
+    const response = await fetch(apiUrl);
+
+    if (response.status === 429) {
+      if (cached) return jsonResponse(cached.data);
+      return jsonResponse({ error: "ADS-B limite atteinte" }, 429);
+    }
+
+    if (!response.ok) {
+      throw new Error(`ADS-B HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    adsbCache.set(cacheKey, { time: now, data });
+
+    return jsonResponse(data);
+  } catch (error) {
+    console.error("Erreur ADS-B", error);
+    if (cached) return jsonResponse(cached.data);
+    return jsonResponse({ error: "ADS-B unavailable" }, 503);
+  }
+}
+
+// =================================================
+// WEATHER
+// =================================================
+
+async function loadWeather(url) {
+  const latsParam = url.searchParams.get("lats") ?? url.searchParams.get("lat");
+  const lngsParam = url.searchParams.get("lngs") ?? url.searchParams.get("lng");
+
+  if (!latsParam || !lngsParam) {
+    return jsonResponse({ error: "Coordonnées (lats/lngs ou lat/lng) obligatoires" }, 400);
+  }
+
+  const cacheUrl = new URL(
+    `${WEATHER_URL}?latitude=${latsParam}&longitude=${lngsParam}&hourly=wind_speed_10m,wind_direction_10m`
+  );
+
+  const cache = caches.default;
+  const cacheRequest = new Request(cacheUrl);
+  const cached = await cache.match(cacheRequest);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(cacheUrl);
+
+    if (!response.ok) {
+      throw new Error(`Weather HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    let result;
+    if (Array.isArray(data)) {
+      result = data.map((item) => ({
+        latitude: item.latitude,
+        longitude: item.longitude,
+        hourly: item.hourly,
+      }));
+    } else {
+      result = {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        hourly: data.hourly,
+      };
+    }
+
+    const responseCache = jsonResponse(result);
+    responseCache.headers.set("Cache-Control", "public, max-age=3600");
+
+    await cache.put(cacheRequest, responseCache.clone());
+
+    return responseCache;
+  } catch (error) {
+    console.error("Erreur météo", error);
+    return jsonResponse({ error: "Weather unavailable" }, 503);
+  }
+}
+
+// =================================================
+// JSON RESPONSE HELPER
+// =================================================
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
