@@ -6,9 +6,9 @@ import "./ui.js";
 let aircraftInterval = null;
 
 async function start() {
-  await loadFires();
-
   await loadWind();
+
+  await loadFires();
 
   await loadAircrafts();
 

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <!-- Ombre portée pour lisibilité sur fonds de carte Leaflet -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+
+    <!-- Dégradé Blanc / Gris argenté pour le fuselage -->
+    <linearGradient id="fuselageWhite" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#ECEFF1"/>
+    </linearGradient>
+
+    <!-- Dégradé Ailes / Métal argenté -->
+    <linearGradient id="wingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#CFD8DC"/>
+      <stop offset="100%" stop-color="#90A4AE"/>
+    </linearGradient>
+
+    <!-- Dégradé Bleu pour empennage / livrée -->
+    <linearGradient id="tailBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1565C0"/>
+      <stop offset="100%" stop-color="#0D47A1"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <!-- Traînée de condensation (Contrail) -->
+    <path d="M48,5 L52,5 L51,22 L49,22 Z" fill="#FFFFFF" opacity="0.6"/>
+    <path d="M46,2 L54,2 L52,15 L48,15 Z" fill="#FFFFFF" opacity="0.3"/>
+
+    <!-- Empennage arrière -->
+    <path d="M28,16 L72,16 L68,23 L32,23 Z" fill="url(#wingGradient)"/>
+    <path d="M28,16 L72,16 L70,18 L30,18 Z" fill="#78909C"/>
+    <path d="M47,12 L53,12 L55,27 L45,27 Z" fill="url(#tailBlue)"/>
+
+    <!-- Fuselage -->
+    <path d="M45,18 C45,18 43,42 43,68 C43,78 47,85 50,85 C53,85 57,78 57,68 C57,42 55,18 55,18 Z" fill="url(#fuselageWhite)"/>
+    <path d="M43.5,30 L56.5,30 L56.3,33 L43.7,33 Z" fill="url(#tailBlue)"/>
+
+    <!-- Hublots passagers -->
+    <g fill="#37474F" opacity="0.8">
+      <circle cx="45" cy="38" r="0.8"/>
+      <circle cx="45" cy="41" r="0.8"/>
+      <circle cx="45" cy="44" r="0.8"/>
+      <circle cx="45" cy="47" r="0.8"/>
+      <circle cx="45" cy="50" r="0.8"/>
+      <circle cx="45" cy="53" r="0.8"/>
+      <circle cx="45" cy="56" r="0.8"/>
+      <circle cx="45" cy="59" r="0.8"/>
+      <circle cx="45" cy="62" r="0.8"/>
+      <circle cx="45" cy="65" r="0.8"/>
+      <circle cx="45" cy="68" r="0.8"/>
+      <circle cx="45" cy="71" r="0.8"/>
+
+      <circle cx="55" cy="38" r="0.8"/>
+      <circle cx="55" cy="41" r="0.8"/>
+      <circle cx="55" cy="44" r="0.8"/>
+      <circle cx="55" cy="47" r="0.8"/>
+      <circle cx="55" cy="50" r="0.8"/>
+      <circle cx="55" cy="53" r="0.8"/>
+      <circle cx="55" cy="56" r="0.8"/>
+      <circle cx="55" cy="59" r="0.8"/>
+      <circle cx="55" cy="62" r="0.8"/>
+      <circle cx="55" cy="65" r="0.8"/>
+      <circle cx="55" cy="68" r="0.8"/>
+      <circle cx="55" cy="71" r="0.8"/>
+    </g>
+
+    <!-- Cockpit -->
+    <path d="M46.5,76 L53.5,76 L52.5,80 L47.5,80 Z" fill="#1A252C" rx="1"/>
+    <path d="M47.5,77 L52.5,77 L52,79.5 L48,79.5 Z" fill="#81D4FA" opacity="0.9"/>
+
+    <!-- Ailes principales -->
+    <path d="M44,48 L4,53 L6,60 L44,57 Z" fill="url(#wingGradient)"/>
+    <path d="M56,48 L96,53 L94,60 L56,57 Z" fill="url(#wingGradient)"/>
+    <path d="M44,48 L4,53 L5,55 L44,51 Z" fill="#78909C"/>
+    <path d="M56,48 L96,53 L95,55 L56,51 Z" fill="#78909C"/>
+
+    <!-- Winglets -->
+    <path d="M3.5,50 L5.5,50 L5.5,60 L3.5,60 Z" fill="url(#tailBlue)"/>
+    <path d="M94.5,50 L96.5,50 L96.5,60 L94.5,60 Z" fill="url(#tailBlue)"/>
+
+    <!-- Réacteurs -->
+    <path d="M25,52 L31,52 L31,64 L25,64 Z" fill="#455A64" rx="2"/>
+    <path d="M25.5,63 L30.5,63 L29.5,66 L26.5,66 Z" fill="#212121"/>
+    <ellipse cx="28" cy="66" rx="2.5" ry="0.8" fill="#B0BEC5"/>
+
+    <path d="M69,52 L75,52 L75,64 L69,64 Z" fill="#455A64" rx="2"/>
+    <path d="M69.5,63 L74.5,63 L73.5,66 L70.5,66 Z" fill="#212121"/>
+    <ellipse cx="72" cy="66" rx="2.5" ry="0.8" fill="#B0BEC5"/>
+
+    <!-- Nez -->
+    <path d="M46,82 C46,85 48,87.5 50,87.5 C52,87.5 54,85 54,82 Z" fill="url(#fuselageWhite)"/>
+    <circle cx="50" cy="86.5" r="1" fill="#37474F"/>
+  </g>
+</svg>

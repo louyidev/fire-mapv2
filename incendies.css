@@ -549,10 +549,11 @@ input[type="range"]::-moz-range-thumb:hover {
 }
 
 /* ======================================================
-   9. STYLISATION DE LA POPUP AÉRONEF (GLASSMORPHISM)
+   9 . STYLISATION DES POPUPS (GLASSMORPHISM)
+   Aéronefs, Vent & Incendies
    ====================================================== */
 
-/* Conteneur principal de la popup Leaflet */
+/* --- CONTENEUR GLOBAL LEAFLET --- */
 .leaflet-popup-content-wrapper {
   background: rgba(15, 23, 42, 0.9) !important;
   backdrop-filter: blur(16px);
@@ -565,14 +566,12 @@ input[type="range"]::-moz-range-thumb:hover {
   overflow: hidden;
 }
 
-/* Flèche sous la popup */
 .leaflet-popup-tip {
   background: rgba(15, 23, 42, 0.9) !important;
   border: 1px solid rgba(56, 189, 248, 0.2) !important;
   box-shadow: none !important;
 }
 
-/* Bouton de fermeture (X) */
 .leaflet-popup-close-button {
   color: #94a3b8 !important;
   font-size: 16px !important;
@@ -584,19 +583,17 @@ input[type="range"]::-moz-range-thumb:hover {
   color: #38bdf8 !important;
 }
 
-/* Contenu interne de la popup */
 .leaflet-popup-content {
   margin: 0 !important;
-  width: 220px !important; /* Élargi pour une meilleure lisibilité */
+  width: 220px !important;
   font-family: inherit !important;
   font-size: 0.75rem !important;
 }
 
-/* --- STRUCTURE INTERNE DU CARD AVION --- */
-
-/* En-tête de l'avion (Indicatif/Callsign) */
-.aircraft-popup-header {
-  background: rgba(56, 189, 248, 0.12);
+/* --- EN-TÊTES (HEADERS) --- */
+.aircraft-popup-header,
+.wind-popup-header,
+.fire-popup-header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding: 10px 12px;
   display: flex;
@@ -604,42 +601,89 @@ input[type="range"]::-moz-range-thumb:hover {
   justify-content: space-between;
 }
 
-.aircraft-title {
+/* Avions & Vent (Thème Bleu) */
+.aircraft-popup-header,
+.wind-popup-header {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+/* Feux (Thème Rouge) */
+.fire-popup-header {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* --- TITRES --- */
+.aircraft-title,
+.wind-title,
+.fire-title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #38bdf8;
   letter-spacing: 0.5px;
   margin: 0;
 }
 
-.aircraft-tag {
-  background: rgba(56, 189, 248, 0.2);
+.aircraft-title,
+.wind-title {
   color: #38bdf8;
+}
+
+.fire-title {
+  color: #f87171;
+}
+
+/* --- TAGS & BADGES --- */
+.aircraft-tag,
+.wind-tag,
+.fire-tag {
   font-size: 0.65rem;
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
 }
 
-/* Corps de la popup */
-.aircraft-popup-body {
+.aircraft-tag,
+.wind-tag,
+.compagny-label {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+
+.fire-tag {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.compagny-label {
+  font-size: 0.85rem;
+  padding: 4px 6px;
+}
+
+/* --- CORPS & GRILLES D'INFORMATIONS --- */
+.aircraft-popup-body,
+.wind-popup-body,
+.fire-popup-body {
   padding: 10px 12px;
 }
 
-/* Grille de métadonnées */
-.aircraft-info-grid {
+.aircraft-info-grid,
+.wind-info-grid,
+.fire-info-grid {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 10px;
   margin-bottom: 10px;
 }
 
-.aircraft-label {
+.aircraft-label,
+.wind-label,
+.fire-label {
   color: #94a3b8;
   font-weight: 500;
 }
 
-.aircraft-value {
+.aircraft-value,
+.wind-value,
+.fire-value {
   color: #f8fafc;
   font-weight: 600;
   text-align: right;
@@ -648,8 +692,10 @@ input[type="range"]::-moz-range-thumb:hover {
   text-overflow: ellipsis;
 }
 
-/* Bloc Télémétrie (Altitude, Vitesse, Cap) */
-.aircraft-telemetry {
+/* --- BLOCS DE TÉLÉMÉTRIE (BAS DE CARD) --- */
+.aircraft-telemetry,
+.wind-telemetry,
+.fire-telemetry {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
@@ -675,4 +721,9 @@ input[type="range"]::-moz-range-thumb:hover {
   font-size: 0.72rem;
   font-weight: 700;
   color: #f1f5f9;
+}
+
+/* Accentuation de la valeur Puissance (FRP) des feux */
+.fire-telemetry .telemetry-item:first-child .telemetry-value {
+  color: #ef4444;
 }

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+    <linearGradient id="yellowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFDE00"/>
+      <stop offset="100%" stop-color="#E6B800"/>
+    </linearGradient>
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF3333"/>
+      <stop offset="100%" stop-color="#CC0000"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <!-- Effet de largage d'eau -->
+    <path d="M50,85 C42,75 38,65 50,50 C62,65 58,75 50,85 Z" fill="#00A8FF" opacity="0.8"/>
+    <circle cx="45" cy="78" r="3" fill="#66C2FF" opacity="0.9"/>
+    <circle cx="53" cy="88" r="2.5" fill="#99D6FF" opacity="0.9"/>
+    <circle cx="50" cy="94" r="1.5" fill="#CCEFFF" opacity="0.8"/>
+
+    <!-- Empennage arrière -->
+    <path d="M48,12 L52,12 L54,25 L46,25 Z" fill="#CC0000"/>
+    <path d="M32,20 L68,20 L66,26 L34,26 Z" fill="url(#yellowGradient)"/>
+    <path d="M32,20 L68,20 L67,22 L33,22 Z" fill="#D32F2F"/>
+
+    <!-- Fuselage -->
+    <path d="M46,18 C46,18 44,40 44,60 C44,68 47,72 50,72 C53,72 56,68 56,60 C56,40 54,18 54,18 Z" fill="url(#yellowGradient)"/>
+
+    <!-- Cockpit -->
+    <path d="M47,38 L53,38 L52,48 L48,48 Z" fill="#1A252C" rx="1"/>
+    <path d="M48,39 L52,39 L51.5,43 L48.5,43 Z" fill="#64B5F6" opacity="0.8"/>
+
+    <!-- Ailes principales -->
+    <path d="M45,45 L5,49 L7,59 L45,55 Z" fill="url(#yellowGradient)"/>
+    <path d="M55,45 L95,49 L93,59 L55,55 Z" fill="url(#yellowGradient)"/>
+
+    <!-- Bords d'attaque et saumons rouges -->
+    <path d="M45,45 L5,49 L6,51 L45,47 Z" fill="#D32F2F"/>
+    <path d="M55,45 L95,49 L94,51 L55,47 Z" fill="#D32F2F"/>
+    <path d="M5,49 L12,49.7 L11.5,58.5 L7,59 Z" fill="#D32F2F"/>
+    <path d="M95,49 L88,49.7 L88.5,58.5 L93,59 Z" fill="#D32F2F"/>
+
+    <!-- Haubans / Dtails d'ailes -->
+    <line x1="30" y1="50" x2="30" y2="54" stroke="#888" stroke-width="1"/>
+    <line x1="70" y1="50" x2="70" y2="54" stroke="#888" stroke-width="1"/>
+
+    <!-- Nez du moteur & Cône d'hélice -->
+    <path d="M46,68 C46,72 48,75 50,75 C52,75 54,72 54,68 Z" fill="#212121"/>
+    <circle cx="50" cy="74" r="2.5" fill="#D32F2F"/>
+
+    <!-- Disque d'hélice en rotation -->
+    <ellipse cx="50" cy="75" rx="16" ry="3" fill="#FFFFFF" opacity="0.5" stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
+  </g>
+</svg>

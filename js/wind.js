@@ -7,13 +7,14 @@ const WIND_GRID = {
   maxLat: 51.0,
   minLng: -5.0,
   maxLng: 9.0,
-  step: 1.0,
+  step: 1.5,
 };
 
 let windDataPoints = [];
 let currentHourIndex = 0;
 let velocityLayer = null;
-let playInterval = null; // ⏯️ Contrôle de l'animation automatique
+let playInterval = null;
+let clickPopup = null; // 📍 Stocke la popup courante
 
 // ------------------------------------------------------
 // Chargement des vents
@@ -43,13 +44,90 @@ export async function loadWind() {
     console.log(`🌬️ Données météo reçues pour ${windDataPoints.length} points`);
 
     setupWindSlider();
+    setupMapClick(); // 👈 Activation du clic sur la carte
 
-    // ⚡ Trouve l'index correspondant à l'heure actuelle
     const initialIndex = findCurrentHourIndex();
     updateWindTime(initialIndex);
   } catch (error) {
     console.error("Erreur chargement vent", error);
   }
+}
+
+// ------------------------------------------------------
+// Gestion du Clic sur la Carte (Popup Vitesse Vent)
+// ------------------------------------------------------
+
+function setupMapClick() {
+  map.on("click", (e) => {
+    // 🛑 Annule si un feu a été cliqué
+    if (e.originalEvent && e.originalEvent._fireClicked) return;
+
+    // 🛑 Annule si le clic touche un marqueur interactif
+    const target = e.originalEvent ? e.originalEvent.target : null;
+    if (
+      target &&
+      target.classList &&
+      target.classList.contains("leaflet-interactive")
+    )
+      return;
+
+    if (!windDataPoints || windDataPoints.length === 0) return;
+
+    const clickedLat = e.latlng.lat;
+    const clickedLng = e.latlng.lng;
+
+    let closestPoint = null;
+    let minDistance = Infinity;
+
+    windDataPoints.forEach((point) => {
+      const dist = Math.hypot(point.lat - clickedLat, point.lng - clickedLng);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestPoint = point;
+      }
+    });
+
+    if (!closestPoint || !closestPoint.hourly) return;
+
+    const speedKmH = Math.round(
+      Number(closestPoint.hourly.wind_speed_10m?.[currentHourIndex] ?? 0),
+    );
+    const dirDeg = Math.round(
+      Number(closestPoint.hourly.wind_direction_10m?.[currentHourIndex] ?? 0),
+    );
+    const gustKmH = closestPoint.hourly.wind_gusts_10m
+      ? Math.round(Number(closestPoint.hourly.wind_gusts_10m[currentHourIndex]))
+      : null;
+
+    // Convertit les degrés en cardinal (N, NE, E, SE, S, SO, O, NO)
+    const directions = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+    const cardinalDir = directions[Math.round(dirDeg / 45) % 8];
+
+    const popupContent = `
+      <div class="wind-popup-header">
+        <span class="wind-title">🌬️ Vent</span>
+        <span class="wind-tag">Météo</span>
+      </div>
+
+      <div class="wind-popup-body">
+        <div class="wind-telemetry" style="grid-template-columns: 1fr;">
+          <div class="telemetry-item">
+            <span class="telemetry-label">VITESSE DU VENT</span>
+            <span class="telemetry-value" style="font-size: 1.1rem; color: #38bdf8;">${speedKmH} km/h</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (clickPopup) {
+      clickPopup.setLatLng(e.latlng).setContent(popupContent).openOn(map);
+    } else {
+      clickPopup = L.popup()
+        .setLatLng(e.latlng)
+        .setContent(popupContent)
+        .openOn(map);
+    }
+  });
 }
 
 // ------------------------------------------------------
@@ -62,7 +140,6 @@ function findCurrentHourIndex() {
 
   const now = new Date();
 
-  // Cherche le créneau le plus proche de maintenant
   let closestIndex = 0;
   let smallestDiff = Infinity;
 
@@ -161,7 +238,6 @@ function convertToVelocityData() {
 function drawWindyEffect() {
   const velocityData = convertToVelocityData();
 
-  // 💡 Si la couche existe déjà, on la met à jour avec setData() au lieu de la détruire
   if (velocityLayer) {
     velocityLayer.setData(velocityData);
     return;
@@ -183,8 +259,8 @@ function drawWindyEffect() {
   const avgSpeedKmH = count > 0 ? totalSpeed / count : 15;
 
   const dynamicVelocityScale = Math.min(
-    Math.max(avgSpeedKmH * 0.0003, 0.002),
-    0.01,
+    Math.max(avgSpeedKmH * 0.0005, 0.003),
+    0.015,
   );
 
   velocityLayer = L.velocityLayer({
@@ -197,24 +273,22 @@ function drawWindyEffect() {
       speedUnit: "km/h",
     },
     data: velocityData,
-    maxVelocity: 20,
+    maxVelocity: 25,
 
-    // 🎨 Couleurs renforcées en opacité pour meilleure visibilité
     colorScale: [
-      "rgba(231, 255, 243, 0.9)",
-      "rgba(229, 255, 212, 0.95)",
-      "rgba(255, 235, 0, 0.95)",
-      "rgba(255, 140, 0, 0.95)",
-      "rgba(255, 30, 0, 1.0)",
-      "rgba(180, 0, 255, 1.0)",
+      "rgba(255, 255, 255, 1.0)",
+      "rgba(0, 255, 255, 1.0)",
+      "rgba(255, 255, 0, 1.0)",
+      "rgba(255, 128, 0, 1.0)",
+      "rgba(255, 0, 128, 1.0)",
+      "rgba(200, 0, 255, 1.0)",
     ],
 
     velocityScale: dynamicVelocityScale,
 
-    // --- 🎯 RÉGLAGES DE VISIBILITÉ ET ÉPAISSEUR ---
-    particleAge: 25,
-    particleMultiplier: 1 / 800,
-    lineWidth: 2.5,
+    particleAge: 65,
+    particleMultiplier: 1 / 1500,
+    lineWidth: 1.5,
     frameRate: 30,
   });
 
@@ -282,7 +356,6 @@ function setupWindSlider() {
   slider.max = maxHours - 1;
 
   slider.addEventListener("input", (event) => {
-    // Pause l'animation si l'utilisateur déplace la barre manuellement
     if (playInterval) togglePlay();
     updateWindTime(Number(event.target.value));
   });
@@ -304,8 +377,8 @@ function togglePlay() {
     if (playBtn) playBtn.textContent = "⏸ Pause";
     playInterval = setInterval(() => {
       let nextHour = currentHourIndex + 1;
-      if (nextHour >= maxHours) nextHour = 0; // Boucle au début
+      if (nextHour >= maxHours) nextHour = 0;
       updateWindTime(nextHour);
-    }, 1200); // Change d'heure toutes les 1.2 secondes
+    }, 1200);
   }
 }

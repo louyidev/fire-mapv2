@@ -19,8 +19,19 @@ let isPlaying = false;
 const activeMarkers = new Set();
 
 // ------------------------------------------------------
-// Styles incendies selon l'âge du foyer
+// Labels & Styles incendies selon l'âge du foyer
 // ------------------------------------------------------
+
+const CATEGORY_LABELS = {
+  c1: "Très récent (< 3h)",
+  c2: "Récent (3h - 6h)",
+  c3: "Actif (6h - 12h)",
+  c4: "Récent (12h - 24h)",
+  c5: "En déclin (24h - 36h)",
+  c6: "Atténué (36h - 48h)",
+  c7: "Ancien (48h - 72h)",
+  c8: "Éteint (> 72h)",
+};
 
 const FIRE_STYLES = {
   c1: { fillColor: "#fff200", color: "#ffffff", fillOpacity: 1, weight: 3 },
@@ -78,6 +89,55 @@ function radiusFor(category, frp) {
   }
 }
 
+// Générateur du template HTML Glassmorphism / Dark Mode
+function buildFirePopupContent(fire, category) {
+  const categoryLabel = CATEGORY_LABELS[category] || category;
+
+  return `
+    <div class="fire-popup-header">
+      <span class="fire-title">🔥 Incendie NASA</span>
+      <span class="fire-tag">${categoryLabel}</span>
+    </div>
+
+    <div class="fire-popup-body">
+      <div class="fire-info-grid">
+        <span class="fire-label">Luminosité</span>
+        <span class="fire-value">${fire.brightness || "N/A"} K</span>
+
+        <span class="fire-label">Confiance</span>
+        <span class="fire-value">${fire.confidence || "N/A"}${fire.confidence && !String(fire.confidence).includes("%") ? "%" : ""}</span>
+
+        <span class="fire-label">Date & Heure</span>
+        <span class="fire-value">${fire.formattedDateTime} UTC</span>
+
+        <span class="fire-label">Passage</span>
+        <span class="fire-value">${fire.daynight === "D" ? "Jour ☀️" : fire.daynight === "N" ? "Nuit 🌙" : (fire.daynight || "N/A")}</span>
+
+        <span class="fire-label">Source / Sat</span>
+        <span class="fire-value">${fire.satellite || fire.source}</span>
+
+        <span class="fire-label">Coordonnées</span>
+        <span class="fire-value">${fire.lat.toFixed(4)}, ${fire.lng.toFixed(4)}</span>
+      </div>
+
+      <div class="fire-telemetry">
+        <div class="telemetry-item">
+          <span class="telemetry-label">FRP</span>
+          <span class="telemetry-value">${fire.frp} MW</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">LAT</span>
+          <span class="telemetry-value">${fire.lat.toFixed(2)}°</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">LNG</span>
+          <span class="telemetry-value">${fire.lng.toFixed(2)}°</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // ------------------------------------------------------
 // Lecture CSV NASA
 // ------------------------------------------------------
@@ -107,6 +167,12 @@ async function fetchCsv(url, name) {
       const date = row[headers.indexOf("acq_date")];
       const time = (row[headers.indexOf("acq_time")] || "0000").padStart(4, "0");
 
+      // Données optionnelles NASA CSV
+      const brightness = row[headers.indexOf("brightness")] || row[headers.indexOf("bright_ti4")] || "N/A";
+      const confidence = row[headers.indexOf("confidence")] || "N/A";
+      const daynight = row[headers.indexOf("daynight")] || "N/A";
+      const satellite = row[headers.indexOf("satellite")] || name;
+
       if (Number.isNaN(lat) || Number.isNaN(lng)) {
         continue;
       }
@@ -119,6 +185,10 @@ async function fetchCsv(url, name) {
         lat,
         lng,
         frp,
+        brightness,
+        confidence,
+        daynight,
+        satellite,
         timestamp: dateObj.getTime(),
         formattedDateTime: formatDate(dateObj),
         source: name,
@@ -235,28 +305,42 @@ function renderStep(index) {
     // Le foyer est antérieur ou égal à la date choisie
     const ageHours = (step.timestamp - fire.timestamp) / 3600000;
     const category = categoryFor(ageHours);
-    const radius = radiusFor(category, fire.frp);
+    const radius = Math.max(radiusFor(category, fire.frp), 8); // Minimum 8px pour la facilité de clic
+    const popupHtml = buildFirePopupContent(fire, category);
 
     // Marqueur principal
     if (!fire.marker) {
       fire.marker = L.circleMarker([fire.lat, fire.lng], {
         renderer: canvasRenderer,
+        pane: "firePane", // 👈 Positionne au-dessus de la couche de vent
         radius,
+        interactive: true,
+        bubblingMouseEvents: false,
         ...FIRE_STYLES[category],
       }).addTo(fireLayer);
 
-      fire.marker.bindPopup(`
-        🔥 Catégorie : ${category}<br>
-        Source : ${fire.source}<br>
-        Date : ${fire.formattedDateTime}<br>
-        FRP : ${fire.frp} MW
-      `);
+      // Bloque l'interception de clic par Leaflet-Velocity (wind.js)
+      fire.marker.on("click", (e) => {
+        if (e.originalEvent) {
+          e.originalEvent._fireClicked = true;
+          e.originalEvent.preventDefault();
+          if (typeof e.originalEvent.stopPropagation === "function") {
+            e.originalEvent.stopPropagation();
+          }
+        }
+      });
+
+      fire.marker.bindPopup(popupHtml);
     } else {
       if (!fireLayer.hasLayer(fire.marker)) {
         fire.marker.addTo(fireLayer);
       }
       fire.marker.setStyle(FIRE_STYLES[category]);
       fire.marker.setRadius(radius);
+
+      if (fire.marker.getPopup()) {
+        fire.marker.setPopupContent(popupHtml);
+      }
     }
 
     // Effet d'incandescence (Glow) pour les feux très récents
@@ -264,6 +348,7 @@ function renderStep(index) {
       if (!fire.glowMarker) {
         fire.glowMarker = L.circleMarker([fire.lat, fire.lng], {
           renderer: canvasRenderer,
+          pane: "firePane",
           radius: radius + 6,
           fillColor: "#ffe600",
           color: "transparent",
@@ -302,7 +387,7 @@ export function startPulse() {
     activeMarkers.forEach((fire) => {
       if (!fire.marker || !fire.glowMarker) return;
 
-      const radius = radiusFor(fire.category, fire.frp);
+      const radius = Math.max(radiusFor(fire.category, fire.frp), 8);
       fire.marker.setRadius(radius * (1 + Math.sin(phase) * 0.08));
       fire.glowMarker.setRadius((radius + 5) * (1 + Math.sin(phase) * 0.25));
     });

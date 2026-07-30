@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <!-- Ombre portée pour lisibilité sur carte -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+
+    <!-- Dégradé Jaune Sécurité Civile -->
+    <linearGradient id="canadairYellow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFEB3B"/>
+      <stop offset="100%" stop-color="#FBC02D"/>
+    </linearGradient>
+
+    <!-- Dégradé Rouge Sécurité Civile -->
+    <linearGradient id="canadairRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E53935"/>
+      <stop offset="100%" stop-color="#B71C1C"/>
+    </linearGradient>
+
+    <!-- Dégradé Bleu (eau) -->
+    <linearGradient id="waterDrop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0288D1"/>
+      <stop offset="100%" stop-color="#01579B"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <!-- Largage d'eau -->
+    <path d="M50,85 C38,72 32,58 50,48 C68,58 62,72 50,85 Z" fill="url(#waterDrop)" opacity="0.8"/>
+    <circle cx="43" cy="76" r="3.5" fill="#29B6F6" opacity="0.9"/>
+    <circle cx="56" cy="85" r="2.8" fill="#81D4FA" opacity="0.85"/>
+    <circle cx="48" cy="93" r="1.8" fill="#E0F7FA" opacity="0.8"/>
+
+    <!-- Flotteurs d'ailes (sous l'avion) -->
+    <rect x="13" y="52" width="3" height="10" rx="1.5" fill="#37474F"/>
+    <path d="M13,52 L16,52 L16,55 L13,55 Z" fill="url(#canadairRed)"/>
+    <rect x="84" y="52" width="3" height="10" rx="1.5" fill="#37474F"/>
+    <path d="M84,52 L87,52 L87,55 L84,55 Z" fill="url(#canadairRed)"/>
+
+    <!-- Empennage arrière avec ailettes/winglets -->
+    <path d="M28,15 L72,15 L69,22 L31,22 Z" fill="url(#canadairYellow)"/>
+    <path d="M28,15 L72,15 L71,17 L29,17 Z" fill="url(#canadairRed)"/>
+    <rect x="27" y="13" width="2" height="11" rx="0.5" fill="url(#canadairRed)"/>
+    <rect x="71" y="13" width="2" height="11" rx="0.5" fill="url(#canadairRed)"/>
+    <path d="M46,14 L54,14 L56,28 L44,28 Z" fill="url(#canadairYellow)"/>
+
+    <!-- Fuselage large (Hydravion) -->
+    <path d="M44,18 C44,18 41,40 41,62 C41,72 45,78 50,78 C55,78 59,72 59,62 C59,40 56,18 56,18 Z" fill="url(#canadairYellow)"/>
+
+    <!-- Bande rouge Sécurité Civile -->
+    <path d="M42,22 L58,22 L57.6,30 L42.4,30 Z" fill="url(#canadairRed)"/>
+
+    <!-- Cockpit -->
+    <path d="M45.5,41 L54.5,41 L53.5,48 L46.5,48 Z" fill="#1A252C" rx="1"/>
+    <path d="M46.5,42 L53.5,42 L53,45.5 L47,45.5 Z" fill="#4FC3F7" opacity="0.85"/>
+
+    <!-- Ailes principales -->
+    <path d="M42,46 L10,48 L11,58 L42,56 Z" fill="url(#canadairYellow)"/>
+    <path d="M58,46 L90,48 L89,58 L58,56 Z" fill="url(#canadairYellow)"/>
+
+    <!-- Bord d'attaque & saumons rouges -->
+    <path d="M42,46 L10,48 L10.5,50 L42,48 Z" fill="url(#canadairRed)"/>
+    <path d="M58,46 L90,48 L89.5,50 L58,48 Z" fill="url(#canadairRed)"/>
+    <path d="M10,48 L18,48.4 L17.5,57.7 L11,58 Z" fill="url(#canadairRed)"/>
+    <path d="M90,48 L82,48.4 L82.5,57.7 L89,58 Z" fill="url(#canadairRed)"/>
+
+    <!-- Winglets de bout d'ailes -->
+    <path d="M9.5,46 L11.5,46 L11.5,59 L9.5,59 Z" fill="url(#canadairRed)"/>
+    <path d="M88.5,46 L90.5,46 L90.5,59 L88.5,59 Z" fill="url(#canadairRed)"/>
+
+    <!-- Nacelles moteurs Pratt & Whitney -->
+    <path d="M27,42 L34,42 L35,59 L26,59 Z" fill="#37474F"/>
+    <path d="M27.5,59 L33.5,59 L32.5,62 L28.5,62 Z" fill="url(#canadairRed)"/>
+    <ellipse cx="30.5" cy="62" rx="9" ry="2.2" fill="#FFFFFF" opacity="0.6" stroke="#555" stroke-width="0.5" stroke-dasharray="2,1"/>
+
+    <path d="M66,42 L73,42 L74,59 L65,59 Z" fill="#37474F"/>
+    <path d="M66.5,59 L72.5,59 L71.5,62 L67.5,62 Z" fill="url(#canadairRed)"/>
+    <ellipse cx="69.5" cy="62" rx="9" ry="2.2" fill="#FFFFFF" opacity="0.6" stroke="#555" stroke-width="0.5" stroke-dasharray="2,1"/>
+
+    <!-- Nez de coque d'hydravion -->
+    <path d="M43,73 C43,77 46,81 50,81 C54,81 57,77 57,73 Z" fill="url(#canadairYellow)"/>
+    <path d="M44.5,75 C44.5,78.5 47,81 50,81 C53,81 55.5,78.5 55.5,75 Z" fill="url(#canadairRed)"/>
+    <path d="M47,78 C47,80 48.5,81.2 50,81.2 C51.5,81.2 53,80 53,78 Z" fill="#212121"/>
+  </g>
+</svg>

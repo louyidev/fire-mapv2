@@ -3,7 +3,7 @@ export const canvasRenderer = L.canvas({
 });
 
 export const map = L.map("map", {
-  center: [44.56, -0.52],
+  center: [44.56, -0.52], // Centré sur le Sud-Ouest / Gironde
   zoom: 9,
   renderer: canvasRenderer,
   preferCanvas: true,
@@ -11,7 +11,7 @@ export const map = L.map("map", {
   tap: true,
 });
 
-// --- COUCHES DE BASE (Base Maps) ---
+// --- COUCHES DE BASE ---
 export const satelliteLayer = L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   {
@@ -20,7 +20,7 @@ export const satelliteLayer = L.tileLayer(
   },
 ).addTo(map);
 
-// --- COUCHES SUPERPOSÉES (Overlays) ---
+// --- COUCHES SUPERPOSÉES ---
 export const roadsLayer = L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
   {
@@ -37,32 +37,50 @@ export const placesLayer = L.tileLayer(
   },
 ).addTo(map);
 
+// Couche principale pour les feux NASA
 export const fireLayer = L.layerGroup().addTo(map);
-export const aircraftLayer = L.layerGroup().addTo(map);
+
+// --- ✈️ SÉPARATION DES CALQUES AÉRIENS ---
+export const fireAircraftLayer = L.layerGroup().addTo(map);       // Avions de lutte & secours (toujours visible)
+export const commercialAircraftLayer = L.layerGroup().addTo(map); // Autres avions (commercial, militaire, etc.)
+
 export const windLayer = L.layerGroup().addTo(map);
+
+// --- 🔥 ZONES BRÛLÉES WMS EFFIS (COPERNICUS CORRIGÉ) ---
+export const effisBurnedAreas = L.tileLayer.wms(
+  "https://effis-gwis-cms.jrc.ec.europa.eu/geoserver/wms",
+  {
+    layers: "effis:effis.ba.current",
+    format: "image/png",
+    transparent: true,
+    version: "1.1.1",
+    crs: L.CRS.EPSG3857,
+    attribution: "© Copernicus EFFIS",
+  }
+).addTo(map);
 
 // --- CONTRÔLE DES COUCHES LEAFLET ---
 export const layerControl = L.control
   .layers(
     {
       Satellite: satelliteLayer,
-      Satellite: satelliteLayer,
     },
     {
-      "🔥 Incendies": fireLayer,
-      "✈️ Avions": aircraftLayer,
+      "🔥 Zones Brûlées (NASA / FIRMS)": fireLayer,
+      "🔥 Polygones EFFIS (Copernicus)": effisBurnedAreas,
+      "✈️ Avions Commerciaux": commercialAircraftLayer,
       "🌬️ Vent": windLayer,
       Routes: roadsLayer,
       Villes: placesLayer,
     },
-    { collapsed: false },
+    { collapsed: false }
   )
   .addTo(map);
-// --- BOUTON TOGGLE (FERMÉ PAR DÉFAUT) ---
+
+// --- BOUTON TOGGLE DU MENU DE COUCHES ---
 const layersContainer = document.querySelector(".leaflet-control-layers");
 
 if (layersContainer) {
-  // 1. Création de l'en-tête cliquable
   const toggleHeader = document.createElement("div");
   toggleHeader.className = "layers-toggle-header";
   toggleHeader.innerHTML = `
@@ -70,18 +88,15 @@ if (layersContainer) {
     <span class="layers-toggle-icon is-collapsed" id="layers-toggle-icon">▼</span>
   `;
 
-  // 2. Insertion en haut du conteneur Leaflet
   layersContainer.insertBefore(toggleHeader, layersContainer.firstChild);
 
   const layersList = document.querySelector(".leaflet-control-layers-list");
   const toggleIcon = document.getElementById("layers-toggle-icon");
 
-  // 3. Masquer la liste immédiatement au chargement
   if (layersList) {
     layersList.classList.add("is-collapsed");
   }
 
-  // 4. Gestion du clic pour ouvrir / fermer
   toggleHeader.addEventListener("click", () => {
     const isCollapsed = layersList.classList.toggle("is-collapsed");
     toggleIcon.classList.toggle("is-collapsed", isCollapsed);
@@ -91,22 +106,14 @@ if (layersContainer) {
 // --- ÉCOUTEURS D'ÉVÉNEMENTS : GESTION DU VENT SUR LA CARTE ---
 map.on("overlayadd", function (eventLayer) {
   if (eventLayer.name === "🌬️ Vent") {
-    // 1. Réaffiche le canvas / conteneur de vitesse du vent sur la carte
     const velocityCanvas = document.querySelector(".velocity-overlay");
     if (velocityCanvas) velocityCanvas.style.display = "block";
-
-    // Si tu as un objet d'animation global (ex: windAnimation), tu peux aussi faire :
-    // if (window.windVelocityLayer) map.addLayer(window.windVelocityLayer);
   }
 });
 
 map.on("overlayremove", function (eventLayer) {
   if (eventLayer.name === "🌬️ Vent") {
-    // 2. Masque le canvas du vent sur la carte
     const velocityCanvas = document.querySelector(".velocity-overlay");
     if (velocityCanvas) velocityCanvas.style.display = "none";
-
-    // Si tu as un objet d'animation global :
-    // if (window.windVelocityLayer) map.removeLayer(window.windVelocityLayer);
   }
 });
