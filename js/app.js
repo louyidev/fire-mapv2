@@ -1,11 +1,14 @@
 import { loadFires } from "./fires.js";
 import { loadAircrafts } from "./aircrafts.js";
 import { loadWind } from "./wind.js";
+import { loadBurnedAreas } from "./burned_areas.js";
 import "./ui.js";
 
 let aircraftInterval = null;
 
 async function start() {
+  // await loadBurnedAreas();
+  
   await loadWind();
 
   await loadFires();

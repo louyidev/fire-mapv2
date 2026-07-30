@@ -727,3 +727,8 @@ input[type="range"]::-moz-range-thumb:hover {
 .fire-telemetry .telemetry-item:first-child .telemetry-value {
   color: #ef4444;
 }
+
+/* Style du pane des zones brûlées */
+.leaflet-burnedAreaPane-pane {
+  mix-blend-mode: color-dodge; /* Permet un effet d'incandescence très propre sur fond sombre */
+}
