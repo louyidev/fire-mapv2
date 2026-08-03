@@ -1,91 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
-  <defs>
-    <!-- Ombre portée pour lisibilité sur carte Leaflet -->
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.5"/>
-    </filter>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28">
+  <!-- Ombre portée -->
+  <path d="M12 23 L2 10 L7 10 L5 3 L12 6 L19 3 L17 10 L22 10 Z" fill="#000000" opacity="0.25" transform="translate(0, 1)"/>
 
-    <!-- Dégradé Camouflage Gris Militaire -->
-    <linearGradient id="militaryGreyFuselage" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#78909C"/>
-      <stop offset="100%" stop-color="#455A64"/>
-    </linearGradient>
+  <!-- AILES & FUSELAGE D'AVION (Vert Kaki Militaire) -->
+  <path d="M12 23 L2 10 L7 10 L5 3 L12 6 L19 3 L17 10 L22 10 Z" fill="#4b5320" stroke="#252b12" stroke-width="1" stroke-linejoin="round"/>
 
-    <!-- Dégradé Ailes Métal Sombre / Camouflage -->
-    <linearGradient id="militaryGreyWing" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#607D8B"/>
-      <stop offset="100%" stop-color="#37474F"/>
-    </linearGradient>
+  <!-- DÉTAILS CAMOUFLAGE / STRUCTURE (Vert sombre) -->
+  <path d="M12 6 L7 10 L12 12 L17 10 Z" fill="#323816"/>
+  <line x1="12" y1="6" x2="12" y2="22" stroke="#252b12" stroke-width="0.8"/>
 
-    <!-- Dégradé cockpit / détails sombres -->
-    <linearGradient id="darkMetal" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#263238"/>
-      <stop offset="100%" stop-color="#102A43"/>
-    </linearGradient>
-  </defs>
-
-  <g filter="url(#shadow)">
-    <!-- Traînée de vol tactique -->
-    <path d="M48,3 L52,3 L51,20 L49,20 Z" fill="#ECEFF1" opacity="0.3"/>
-
-    <!-- Empennage arrière en T massif -->
-    <path d="M22,12 L78,12 L74,19 L26,19 Z" fill="url(#militaryGreyWing)"/>
-    <path d="M22,12 L78,12 L76,14 L24,14 Z" fill="#263238"/>
-    <path d="M45,11 L55,11 L57,26 L43,26 Z" fill="url(#militaryGreyFuselage)"/>
-
-    <!-- Fuselage large d'avion de transport -->
-    <path d="M42,16 C42,16 39,40 39,66 C39,78 44,86 50,86 C56,86 61,78 61,66 C61,40 58,16 58,16 Z" fill="url(#militaryGreyFuselage)"/>
-
-    <!-- Cocarde centrale Armée de l'Air -->
-    <circle cx="50" cy="30" r="3" fill="#0D47A1"/>
-    <circle cx="50" cy="30" r="2" fill="#FFFFFF"/>
-    <circle cx="50" cy="30" r="1" fill="#B71C1C"/>
-
-    <!-- Cockpit -->
-    <path d="M45,76 L55,76 L53.5,82 L46.5,82 Z" fill="url(#darkMetal)" rx="1"/>
-    <path d="M46,77 L54,77 L53,80.5 L47,80.5 Z" fill="#81D4FA" opacity="0.75"/>
-
-    <!-- Ailes hautes -->
-    <path d="M40,46 L3,50 L4,59 L40,56 Z" fill="url(#militaryGreyWing)"/>
-    <path d="M60,46 L97,50 L96,59 L60,56 Z" fill="url(#militaryGreyWing)"/>
-    <path d="M40,46 L3,50 L4,52 L40,48 Z" fill="#263238"/>
-    <path d="M60,46 L97,50 L96,52 L60,48 Z" fill="#263238"/>
-
-    <!-- Cocardes d'ailes -->
-    <g transform="translate(18, 52)">
-      <circle cx="0" cy="0" r="2.5" fill="#0D47A1"/>
-      <circle cx="0" cy="0" r="1.6" fill="#FFFFFF"/>
-      <circle cx="0" cy="0" r="0.8" fill="#B71C1C"/>
-    </g>
-    <g transform="translate(82, 52)">
-      <circle cx="0" cy="0" r="2.5" fill="#0D47A1"/>
-      <circle cx="0" cy="0" r="1.6" fill="#FFFFFF"/>
-      <circle cx="0" cy="0" r="0.8" fill="#B71C1C"/>
-    </g>
-
-    <!-- 4 Turbopropulseurs à hélices -->
-    <!-- Moteur 1 -->
-    <path d="M28,42 L34,42 L35,60 L27,60 Z" fill="#37474F"/>
-    <path d="M28.5,60 L33.5,60 L32.5,63 L29.5,63 Z" fill="#212121"/>
-    <ellipse cx="31" cy="63" rx="7.5" ry="2" fill="#CFD8DC" opacity="0.7" stroke="#263238" stroke-width="0.5" stroke-dasharray="1.5,1"/>
-
-    <!-- Moteur 2 -->
-    <path d="M14,44 L20,44 L21,60 L13,60 Z" fill="#37474F"/>
-    <path d="M14.5,60 L19.5,60 L18.5,63 L15.5,63 Z" fill="#212121"/>
-    <ellipse cx="17" cy="63" rx="7.5" ry="2" fill="#CFD8DC" opacity="0.7" stroke="#263238" stroke-width="0.5" stroke-dasharray="1.5,1"/>
-
-    <!-- Moteur 3 -->
-    <path d="M66,42 L72,42 L73,60 L65,60 Z" fill="#37474F"/>
-    <path d="M66.5,60 L71.5,60 L70.5,63 L67.5,63 Z" fill="#212121"/>
-    <ellipse cx="69" cy="63" rx="7.5" ry="2" fill="#CFD8DC" opacity="0.7" stroke="#263238" stroke-width="0.5" stroke-dasharray="1.5,1"/>
-
-    <!-- Moteur 4 -->
-    <path d="M80,44 L86,44 L87,60 L79,60 Z" fill="#37474F"/>
-    <path d="M80.5,60 L85.5,60 L84.5,63 L81.5,63 Z" fill="#212121"/>
-    <ellipse cx="83" cy="63" rx="7.5" ry="2" fill="#CFD8DC" opacity="0.7" stroke="#263238" stroke-width="0.5" stroke-dasharray="1.5,1"/>
-
-    <!-- Nez militaire et Radôme -->
-    <path d="M44,82 C44,86 47,88.5 50,88.5 C53,88.5 56,86 56,82 Z" fill="url(#militaryGreyFuselage)"/>
-    <path d="M46,85.5 C46,87.5 48,88.5 50,88.5 C52,88.5 54,87.5 54,85.5 Z" fill="#212121"/>
+  <!-- PALES D'HÉLICOPTÈRE (Rotor central à 4 pales) -->
+  <g stroke="#c2b280" stroke-width="1.2" stroke-linecap="round" opacity="0.9">
+    <line x1="4" y1="11" x2="20" y2="11"/> <!-- Pale horizontale -->
+    <line x1="12" y1="3" x2="12" y2="19"/> <!-- Pale verticale -->
   </g>
+  <!-- Moyeu du rotor (Centre) -->
+  <circle cx="12" cy="11" r="1.8" fill="#1f240e" stroke="#c2b280" stroke-width="0.8"/>
+
+  <!-- COCKPIT / VERRIÈRE (Dorée / Ambre tactique) -->
+  <path d="M10.8 14 C11 16 11.5 17.5 12 17.5 C12.5 17.5 13 16 13.2 14 Z" fill="#d97706" opacity="0.85"/>
+
+  <!-- COCARDE FRANÇAISE (Pointe du nez, vers le bas) -->
+  <circle cx="12" cy="20.5" r="1.8" fill="#ed2939"/>
+  <circle cx="12" cy="20.5" r="1.2" fill="#ffffff"/>
+  <circle cx="12" cy="20.5" r="0.6" fill="#002654"/>
 </svg>

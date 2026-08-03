@@ -1,8 +1,7 @@
-import { canvasRenderer, fireLayer } from "./map.js";
-
+import { map, mapReady } from "./map.js";
 import { termLog, updateLastFireUpdate, updateStatus } from "./ui.js";
 
-const NASA_API_KEY = "d9fe3ef6c297fec40b61f84714b55a56";
+const WORKER_URL = "https://square-frog-f706.louyidev.workers.dev";
 
 // 🚀 LOGO NASA STYLISÉ (SVG)
 const NASA_LOGO_SVG = `
@@ -16,18 +15,16 @@ const NASA_LOGO_SVG = `
 </svg>
 `;
 
-let allFires = [];
+let allFiresGeoJSON = { type: "FeatureCollection", features: [] };
 let timeSteps = [];
 let currentStepIndex = -1;
-
 let animationInterval = null;
-let pulseInterval = null;
+let pulseAnimationId = null;
 let isPlaying = false;
-
-const activeMarkers = new Set();
+let activePopup = null;
 
 // ------------------------------------------------------
-// Labels & Styles incendies selon l'âge du foyer
+// Labels & Styles des incendies selon l'âge du foyer
 // ------------------------------------------------------
 
 const CATEGORY_LABELS = {
@@ -41,7 +38,7 @@ const CATEGORY_LABELS = {
   c8: "Éteint (> 72h)",
 };
 
-const FIRE_STYLES = {
+export const FIRE_STYLES = {
   c1: { fillColor: "#fff200", color: "#ffffff", fillOpacity: 1, weight: 3 },
   c2: { fillColor: "#ffd000", color: "#ffef9f", fillOpacity: 0.98, weight: 3 },
   c3: { fillColor: "#ff9800", color: "#ff5e00", fillOpacity: 0.95, weight: 3 },
@@ -51,6 +48,63 @@ const FIRE_STYLES = {
   c7: { fillColor: "#4a0404", color: "#1f1f1f", fillOpacity: 0.45, weight: 1 },
   c8: { fillColor: "#202020", color: "#000000", fillOpacity: 0.25, weight: 1 },
 };
+
+// Expressions MapLibre basées sur FIRE_STYLES
+const fireColorExpr = [
+  "match",
+  ["get", "category"],
+  "c1", FIRE_STYLES.c1.fillColor,
+  "c2", FIRE_STYLES.c2.fillColor,
+  "c3", FIRE_STYLES.c3.fillColor,
+  "c4", FIRE_STYLES.c4.fillColor,
+  "c5", FIRE_STYLES.c5.fillColor,
+  "c6", FIRE_STYLES.c6.fillColor,
+  "c7", FIRE_STYLES.c7.fillColor,
+  "c8", FIRE_STYLES.c8.fillColor,
+  FIRE_STYLES.c8.fillColor,
+];
+
+const fireStrokeColorExpr = [
+  "match",
+  ["get", "category"],
+  "c1", FIRE_STYLES.c1.color,
+  "c2", FIRE_STYLES.c2.color,
+  "c3", FIRE_STYLES.c3.color,
+  "c4", FIRE_STYLES.c4.color,
+  "c5", FIRE_STYLES.c5.color,
+  "c6", FIRE_STYLES.c6.color,
+  "c7", FIRE_STYLES.c7.color,
+  "c8", FIRE_STYLES.c8.color,
+  FIRE_STYLES.c8.color,
+];
+
+const fireStrokeWidthExpr = [
+  "match",
+  ["get", "category"],
+  "c1", FIRE_STYLES.c1.weight,
+  "c2", FIRE_STYLES.c2.weight,
+  "c3", FIRE_STYLES.c3.weight,
+  "c4", FIRE_STYLES.c4.weight,
+  "c5", FIRE_STYLES.c5.weight,
+  "c6", FIRE_STYLES.c6.weight,
+  "c7", FIRE_STYLES.c7.weight,
+  "c8", FIRE_STYLES.c8.weight,
+  1,
+];
+
+const fireOpacityExpr = [
+  "match",
+  ["get", "category"],
+  "c1", FIRE_STYLES.c1.fillOpacity,
+  "c2", FIRE_STYLES.c2.fillOpacity,
+  "c3", FIRE_STYLES.c3.fillOpacity,
+  "c4", FIRE_STYLES.c4.fillOpacity,
+  "c5", FIRE_STYLES.c5.fillOpacity,
+  "c6", FIRE_STYLES.c6.fillOpacity,
+  "c7", FIRE_STYLES.c7.fillOpacity,
+  "c8", FIRE_STYLES.c8.fillOpacity,
+  0.25,
+];
 
 // ------------------------------------------------------
 // Utilitaires
@@ -74,66 +128,62 @@ function categoryFor(ageHours) {
   if (ageHours <= 36) return "c5";
   if (ageHours <= 48) return "c6";
   if (ageHours <= 72) return "c7";
-
   return "c8";
 }
 
-function isHotFire(category) {
-  return ["c1", "c2", "c3"].includes(category);
-}
+function getFullSatelliteName(satCode, sourceName) {
+  const sat = String(satCode || "").trim().toUpperCase();
+  const source = String(sourceName || "").trim().toUpperCase();
 
-function radiusFor(category, frp) {
-  const base = Math.min(Math.max(frp * 0.45, 7), 18);
+  if (source.includes("SNPP")) return "Suomi NPP (VIIRS)";
+  if (source.includes("NOAA20") || source.includes("NOAA-20"))
+    return "NOAA-20 (JPSS-1 / VIIRS)";
+  if (source.includes("MODIS")) {
+    if (sat === "T" || sat.includes("TERRA")) return "Terra (EOS / MODIS)";
+    if (sat === "A" || sat.includes("AQUA")) return "Aqua (EOS / MODIS)";
+    return "Terra / Aqua (MODIS)";
+  }
 
-  switch (category) {
-    case "c1":
-      return base;
-    case "c2":
-      return base - 1;
-    case "c3":
-      return base - 2;
-    case "c4":
-      return 7;
-    case "c5":
-      return 6;
-    case "c6":
-      return 5;
-    case "c7":
-      return 4;
+  switch (sat) {
+    case "NPP":
+    case "SNPP":
+      return "Suomi NPP (VIIRS)";
+    case "N":
+    case "NOAA20":
+    case "NOAA-20":
+      return "NOAA-20 (JPSS-1 / VIIRS)";
+    case "T":
+      return "Terra (EOS / MODIS)";
+    case "A":
+      return "Aqua (EOS / MODIS)";
     default:
-      return 3;
+      return satCode ? `Satellite (${satCode})` : sourceName || "Inconnu";
   }
 }
 
-// Générateur du template HTML Glassmorphism / Dark Mode avec Logo NASA
-function buildFirePopupContent(fire, category) {
-  const categoryLabel = CATEGORY_LABELS[category] || category;
-
-  // --- Traduction / Nettoyage de la confiance ---
+function buildFirePopupContent(properties) {
+  const categoryLabel = CATEGORY_LABELS[properties.category] || properties.category;
   let formattedConfidence = "N/A";
   if (
-    fire.confidence !== undefined &&
-    fire.confidence !== null &&
-    fire.confidence !== "N/A"
+    properties.confidence !== undefined &&
+    properties.confidence !== null &&
+    properties.confidence !== "N/A"
   ) {
-    const confStr = String(fire.confidence).trim().toLowerCase();
+    const confStr = String(properties.confidence).trim().toLowerCase();
     if (confStr === "l" || confStr === "low") formattedConfidence = "Faible";
-    else if (confStr === "n" || confStr === "nominal")
-      formattedConfidence = "Moyenne";
-    else if (confStr === "h" || confStr === "high")
-      formattedConfidence = "Élevée";
+    else if (confStr === "n" || confStr === "nominal") formattedConfidence = "Moyenne";
+    else if (confStr === "h" || confStr === "high") formattedConfidence = "Élevée";
     else if (!isNaN(confStr)) formattedConfidence = `${confStr}%`;
     else formattedConfidence = confStr.toUpperCase();
   }
 
-  // --- Nom exact du satellite ---
-  const exactSatellite = getFullSatelliteName(fire.satellite, fire.source);
+  const exactSatellite = getFullSatelliteName(properties.satellite, properties.source);
 
   return `
     <div class="fire-popup-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
       <div style="display: flex; align-items: center; gap: 6px;">
         ${NASA_LOGO_SVG}
-        <span class="fire-title" style="font-weight: bold;">Détection Satellite NASA</span>
+        <span class="fire-title" style="font-weight: bold;">Sat. NASA</span>
       </div>
       <span class="fire-tag">${categoryLabel}</span>
     </div>
@@ -142,16 +192,16 @@ function buildFirePopupContent(fire, category) {
       <!-- 1. MÉTRIQUES CLÉS -->
       <div class="fire-telemetry" style="margin-bottom: 12px;">
         <div class="telemetry-item">
-          <span class="telemetry-label">FRP (Puissance)</span>
-          <span class="telemetry-value">${fire.frp} MW</span>
+          <span class="telemetry-label">FRP</span>
+          <span class="telemetry-value">${properties.frp} MW</span>
         </div>
         <div class="telemetry-item">
           <span class="telemetry-label">LAT</span>
-          <span class="telemetry-value">${fire.lat.toFixed(2)}°</span>
+          <span class="telemetry-value">${Number(properties.lat).toFixed(2)}°</span>
         </div>
         <div class="telemetry-item">
           <span class="telemetry-label">LNG</span>
-          <span class="telemetry-value">${fire.lng.toFixed(2)}°</span>
+          <span class="telemetry-value">${Number(properties.lng).toFixed(2)}°</span>
         </div>
       </div>
 
@@ -161,26 +211,26 @@ function buildFirePopupContent(fire, category) {
         <span class="fire-value" style="font-weight: 600; color: #ffca28;">${exactSatellite}</span>
 
         <span class="fire-label">Date & Heure</span>
-        <span class="fire-value">${fire.formattedDateTime} UTC</span>
+        <span class="fire-value">${properties.formattedDateTime} UTC</span>
 
         <span class="fire-label">Confiance</span>
         <span class="fire-value">${formattedConfidence}</span>
 
         <span class="fire-label">Luminosité</span>
-        <span class="fire-value">${fire.brightness || "N/A"} K</span>
+        <span class="fire-value">${properties.brightness || "N/A"} K</span>
 
         <span class="fire-label">Passage</span>
-        <span class="fire-value">${fire.daynight === "D" ? "Jour ☀️" : fire.daynight === "N" ? "Nuit 🌙" : fire.daynight || "N/A"}</span>
+        <span class="fire-value">${properties.daynight === "D" ? "Jour ☀️" : properties.daynight === "N" ? "Nuit 🌙" : properties.daynight || "N/A"}</span>
 
         <span class="fire-label">Coordonnées exactes</span>
-        <span class="fire-value">${fire.lat.toFixed(4)}, ${fire.lng.toFixed(4)}</span>
+        <span class="fire-value">${Number(properties.lat).toFixed(4)}, ${Number(properties.lng).toFixed(4)}</span>
       </div>
     </div>
   `;
 }
 
 // ------------------------------------------------------
-// Lecture CSV NASA
+// Fetch CSV NASA
 // ------------------------------------------------------
 
 async function fetchCsv(url, name) {
@@ -188,30 +238,23 @@ async function fetchCsv(url, name) {
 
   try {
     const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const csv = await response.text();
     const lines = csv.trim().split("\n");
     if (lines.length <= 1) return [];
 
     const headers = lines[0].split(",").map((x) => x.trim());
-    const result = [];
+    const features = [];
 
     for (let i = 1; i < lines.length; i++) {
       const row = lines[i].split(",");
-
       const lat = Number(row[headers.indexOf("latitude")]);
       const lng = Number(row[headers.indexOf("longitude")]);
       const frp = Number(row[headers.indexOf("frp")]) || 1;
       const date = row[headers.indexOf("acq_date")];
-      const time = (row[headers.indexOf("acq_time")] || "0000").padStart(
-        4,
-        "0",
-      );
+      const time = (row[headers.indexOf("acq_time")] || "0000").padStart(4, "0");
 
-      // Données optionnelles NASA CSV
       const brightness =
         row[headers.indexOf("brightness")] ||
         row[headers.indexOf("bright_ti4")] ||
@@ -220,33 +263,35 @@ async function fetchCsv(url, name) {
       const daynight = row[headers.indexOf("daynight")] || "N/A";
       const satellite = row[headers.indexOf("satellite")] || name;
 
-      if (Number.isNaN(lat) || Number.isNaN(lng)) {
-        continue;
-      }
+      if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
 
-      const dateObj = new Date(
-        `${date}T${time.substring(0, 2)}:${time.substring(2)}:00Z`,
-      );
+      const dateObj = new Date(`${date}T${time.substring(0, 2)}:${time.substring(2)}:00Z`);
 
-      result.push({
-        lat,
-        lng,
-        frp,
-        brightness,
-        confidence,
-        daynight,
-        satellite,
-        timestamp: dateObj.getTime(),
-        formattedDateTime: formatDate(dateObj),
-        source: name,
-        marker: null,
-        glowMarker: null,
-        category: null,
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [lng, lat],
+        },
+        properties: {
+          lat,
+          lng,
+          frp,
+          brightness,
+          confidence,
+          daynight,
+          satellite,
+          acq_date: date,
+          timestamp: dateObj.getTime(),
+          formattedDateTime: formatDate(dateObj),
+          source: name,
+          category: "c1",
+        },
       });
     }
 
-    termLog(`${name} : ${result.length} points`);
-    return result;
+    termLog(`${name} : ${features.length} points`);
+    return features;
   } catch (error) {
     console.error(`Erreur NASA (${name})`, error);
     return [];
@@ -254,46 +299,47 @@ async function fetchCsv(url, name) {
 }
 
 // ------------------------------------------------------
-// Chargement NASA
+// Chargement NASA & Layers MapLibre
 // ------------------------------------------------------
 
 export async function loadFires() {
+  await mapReady;
+
   const bbox = "-5.5,41.0,9.8,51.5";
 
   const sources = [
     {
       name: "VIIRS SNPP",
-      url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${NASA_API_KEY}/VIIRS_SNPP_NRT/${bbox}/5`,
+      url: `${WORKER_URL}/nasa-fires?source=VIIRS_SNPP_NRT&bbox=${bbox}&day=5`,
     },
     {
       name: "VIIRS NOAA20",
-      url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${NASA_API_KEY}/VIIRS_NOAA20_NRT/${bbox}/5`,
+      url: `${WORKER_URL}/nasa-fires?source=VIIRS_NOAA20_NRT&bbox=${bbox}&day=5`,
     },
     {
       name: "MODIS",
-      url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${NASA_API_KEY}/MODIS_NRT/${bbox}/5`,
+      url: `${WORKER_URL}/nasa-fires?source=MODIS_NRT&bbox=${bbox}&day=5`,
     },
   ];
 
   const results = await Promise.all(
-    sources.map((s) => fetchCsv(s.url, s.name)),
+    sources.map((source) => fetchCsv(source.url, source.name))
   );
 
-  fireLayer.clearLayers();
+  const allFeatures = results.flat();
+  allFeatures.sort((a, b) => a.properties.timestamp - b.properties.timestamp);
 
-  allFires = results.flat();
-  allFires.sort((a, b) => a.timestamp - b.timestamp);
+  allFiresGeoJSON.features = allFeatures;
 
-  // Génération des pas de temps uniques
   timeSteps = [
     ...new Map(
-      allFires.map((f) => [
-        f.timestamp,
+      allFeatures.map((feature) => [
+        feature.properties.timestamp,
         {
-          timestamp: f.timestamp,
-          label: f.formattedDateTime,
+          timestamp: feature.properties.timestamp,
+          label: feature.properties.formattedDateTime,
         },
-      ]),
+      ])
     ).values(),
   ];
 
@@ -302,13 +348,96 @@ export async function loadFires() {
     return;
   }
 
-  const lastIndex = timeSteps.length - 1;
+  // Expression de calcul du Rayon de base
+  const baseRadiusExpr = [
+    "let",
+    "base",
+    ["min", ["max", ["*", ["get", "frp"], 0.45], 7], 18],
+    [
+      "match",
+      ["get", "category"],
+      "c1", ["max", ["var", "base"], 8],
+      "c2", ["max", ["-", ["var", "base"], 1], 8],
+      "c3", ["max", ["-", ["var", "base"], 2], 8],
+      "c4", 8,
+      "c5", 8,
+      "c6", 8,
+      "c7", 8,
+      8
+    ]
+  ];
 
-  // Configuration de la timeline
-  const timelinePanel = document.getElementById("timeline-panel");
-  if (timelinePanel) {
-    timelinePanel.style.display = "block";
+  if (!map.getSource("fires-source")) {
+    map.addSource("fires-source", {
+      type: "geojson",
+      data: allFiresGeoJSON,
+    });
+
+    // Layer 1 : Halo lumineux d'incandescence (Glow) pour feux récents (c1, c2, c3)
+    map.addLayer({
+      id: "fires-glow-layer",
+      type: "circle",
+      source: "fires-source",
+      paint: {
+        "circle-radius": ["+", baseRadiusExpr, 6],
+        "circle-color": "#ffe600",
+        "circle-opacity": 0.35,
+        "circle-stroke-width": 0,
+      },
+    });
+
+    // Layer 2 : Marqueurs principaux avec styles issus de FIRE_STYLES
+    map.addLayer({
+      id: "fires-layer",
+      type: "circle",
+      source: "fires-source",
+      paint: {
+        "circle-radius": baseRadiusExpr,
+        "circle-color": fireColorExpr,
+        "circle-opacity": fireOpacityExpr,
+        "circle-stroke-color": fireStrokeColorExpr,
+        "circle-stroke-width": fireStrokeWidthExpr,
+        "circle-stroke-opacity": fireOpacityExpr,
+      },
+    });
+
+    // Gestion de l'ouverture des pop-ups
+    map.on("click", "fires-layer", (event) => {
+      if (event.originalEvent) {
+        event.originalEvent._fireClicked = true;
+        event.originalEvent.stopPropagation();
+      }
+
+      const feature = event.features[0];
+      const popupHtml = buildFirePopupContent(feature.properties);
+
+      if (activePopup) {
+        activePopup.remove();
+      }
+
+      activePopup = new maplibregl.Popup({
+        closeButton: true,
+        offset: 10,
+      })
+        .setLngLat(feature.geometry.coordinates)
+        .setHTML(popupHtml)
+        .addTo(map);
+    });
+
+    map.on("mouseenter", "fires-layer", () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+
+    map.on("mouseleave", "fires-layer", () => {
+      map.getCanvas().style.cursor = "";
+    });
+  } else {
+    map.getSource("fires-source").setData(allFiresGeoJSON);
   }
+
+  const lastIndex = timeSteps.length - 1;
+  const timelinePanel = document.getElementById("timeline-panel");
+  if (timelinePanel) timelinePanel.style.display = "block";
 
   const slider = document.getElementById("time-slider");
   if (slider) {
@@ -318,127 +447,108 @@ export async function loadFires() {
   }
 
   renderStep(lastIndex);
+  startPulse();
   updateFireSliderLabel(lastIndex);
   updateFireStatus();
-  updateStatus(`🔥 ${allFires.length} foyers détectés`);
-
-  startPulse();
+  updateStatus(`🔥 ${allFeatures.length} foyers détectés`);
 }
 
 // ------------------------------------------------------
-// Rendu dynamique de la carte (Gestion rembobinage)
+// Animation de pulsation (c1, c2, c3 pulsent à vitesse constante)
+// ------------------------------------------------------
+
+export function startPulse() {
+  if (pulseAnimationId) return;
+
+  let phase = 0;
+
+  function animate() {
+    // Phase incrémentée plus doucement (0.04 au lieu de 0.2) pour un pulse régulier et fluide
+    phase += 0.04;
+
+    const scaleFactor = 1 + Math.sin(phase) * 0.1;
+    const glowScaleFactor = 1 + Math.sin(phase) * 0.22;
+
+    // 1. Rayons des cercles principaux (c1, c2, c3)
+    if (map.getLayer("fires-layer")) {
+      const pulsedRadiusExpr = [
+        "let",
+        "base",
+        ["min", ["max", ["*", ["get", "frp"], 0.45], 7], 18],
+        [
+          "match",
+          ["get", "category"],
+          "c1", ["*", ["max", ["var", "base"], 8], scaleFactor],
+          "c2", ["*", ["max", ["-", ["var", "base"], 1], 8], scaleFactor],
+          "c3", ["*", ["max", ["-", ["var", "base"], 2], 8], scaleFactor],
+          // c4 à c8 restent fixes
+          "c4", 8,
+          "c5", 8,
+          "c6", 8,
+          "c7", 8,
+          8,
+        ]
+      ];
+
+      map.setPaintProperty("fires-layer", "circle-radius", pulsedRadiusExpr);
+    }
+
+    // 2. Halo lumineux (glow) synchronisé sur c1, c2, c3
+    if (map.getLayer("fires-glow-layer")) {
+      const pulsedGlowRadiusExpr = [
+        "let",
+        "base",
+        ["min", ["max", ["*", ["get", "frp"], 0.45], 7], 18],
+        [
+          "match",
+          ["get", "category"],
+          "c1", ["*", ["+", ["max", ["var", "base"], 8], 6], glowScaleFactor],
+          "c2", ["*", ["+", ["max", ["-", ["var", "base"], 1], 8], 6], glowScaleFactor],
+          "c3", ["*", ["+", ["max", ["-", ["var", "base"], 2], 8], 6], glowScaleFactor],
+          0,
+        ]
+      ];
+
+      map.setPaintProperty("fires-glow-layer", "circle-radius", pulsedGlowRadiusExpr);
+    }
+
+    pulseAnimationId = requestAnimationFrame(animate);
+  }
+
+  animate();
+}
+
+// ------------------------------------------------------
+// Rendu dynamique de la carte (Gestion rembobinage / slider)
 // ------------------------------------------------------
 
 function renderStep(index) {
   const step = timeSteps[index];
   if (!step) return;
 
-  activeMarkers.clear();
-
-  allFires.forEach((fire) => {
-    // Si le foyer est futur par rapport au curseur : on le masque
-    if (fire.timestamp > step.timestamp) {
-      if (fire.marker) {
-        fireLayer.removeLayer(fire.marker);
-        fire.marker = null;
-      }
-      if (fire.glowMarker) {
-        fireLayer.removeLayer(fire.glowMarker);
-        fire.glowMarker = null;
-      }
-      return;
+  allFiresGeoJSON.features.forEach((feature) => {
+    if (feature.properties.timestamp <= step.timestamp) {
+      const ageHours = (step.timestamp - feature.properties.timestamp) / 3600000;
+      feature.properties.category = categoryFor(ageHours);
     }
-
-    // Le foyer est antérieur ou égal à la date choisie
-    const ageHours = (step.timestamp - fire.timestamp) / 3600000;
-    const category = categoryFor(ageHours);
-    const radius = Math.max(radiusFor(category, fire.frp), 8); // Minimum 8px pour la facilité de clic
-    const popupHtml = buildFirePopupContent(fire, category);
-
-    // Marqueur principal
-    if (!fire.marker) {
-      fire.marker = L.circleMarker([fire.lat, fire.lng], {
-        renderer: canvasRenderer,
-        pane: "firePane", // 👈 Positionne au-dessus de la couche de vent
-        radius,
-        interactive: true,
-        bubblingMouseEvents: false,
-        ...FIRE_STYLES[category],
-      }).addTo(fireLayer);
-
-      // Bloque l'interception de clic par Leaflet-Velocity (wind.js)
-      fire.marker.on("click", (e) => {
-        if (e.originalEvent) {
-          e.originalEvent._fireClicked = true;
-          e.originalEvent.preventDefault();
-          if (typeof e.originalEvent.stopPropagation === "function") {
-            e.originalEvent.stopPropagation();
-          }
-        }
-      });
-
-      fire.marker.bindPopup(popupHtml);
-    } else {
-      if (!fireLayer.hasLayer(fire.marker)) {
-        fire.marker.addTo(fireLayer);
-      }
-      fire.marker.setStyle(FIRE_STYLES[category]);
-      fire.marker.setRadius(radius);
-
-      if (fire.marker.getPopup()) {
-        fire.marker.setPopupContent(popupHtml);
-      }
-    }
-
-    // Effet d'incandescence (Glow) pour les feux très récents
-    if (isHotFire(category)) {
-      if (!fire.glowMarker) {
-        fire.glowMarker = L.circleMarker([fire.lat, fire.lng], {
-          renderer: canvasRenderer,
-          pane: "firePane",
-          radius: radius + 6,
-          fillColor: "#ffe600",
-          color: "transparent",
-          fillOpacity: 0.35,
-          interactive: false,
-        }).addTo(fireLayer);
-      } else if (!fireLayer.hasLayer(fire.glowMarker)) {
-        fire.glowMarker.addTo(fireLayer);
-      }
-      activeMarkers.add(fire);
-    } else {
-      if (fire.glowMarker) {
-        fireLayer.removeLayer(fire.glowMarker);
-        fire.glowMarker = null;
-      }
-    }
-
-    fire.category = category;
   });
 
+  const source = map.getSource("fires-source");
+  if (source) {
+    source.setData(allFiresGeoJSON);
+
+    // Filtrage chronologique
+    map.setFilter("fires-layer", ["<=", ["get", "timestamp"], step.timestamp]);
+
+    // Halo réservé aux foyers c1, c2 et c3
+    map.setFilter("fires-glow-layer", [
+      "all",
+      ["<=", ["get", "timestamp"], step.timestamp],
+      ["in", ["get", "category"], ["literal", ["c1", "c2", "c3"]]],
+    ]);
+  }
+
   currentStepIndex = index;
-}
-
-// ------------------------------------------------------
-// Animation de pulsation des foyers chauds
-// ------------------------------------------------------
-
-export function startPulse() {
-  if (pulseInterval) return;
-
-  let phase = 0;
-
-  pulseInterval = setInterval(() => {
-    phase += 0.3;
-
-    activeMarkers.forEach((fire) => {
-      if (!fire.marker || !fire.glowMarker) return;
-
-      const radius = Math.max(radiusFor(fire.category, fire.frp), 8);
-      fire.marker.setRadius(radius * (1 + Math.sin(phase) * 0.08));
-      fire.glowMarker.setRadius((radius + 5) * (1 + Math.sin(phase) * 0.25));
-    });
-  }, 40);
 }
 
 // ------------------------------------------------------
@@ -459,9 +569,7 @@ function togglePlay() {
 
     animationInterval = setInterval(() => {
       let nextIndex = currentStepIndex + 1;
-      if (nextIndex >= timeSteps.length) {
-        nextIndex = 0;
-      }
+      if (nextIndex >= timeSteps.length) nextIndex = 0;
       renderStep(nextIndex);
       updateFireSliderLabel(nextIndex);
     }, 500);
@@ -469,7 +577,7 @@ function togglePlay() {
 }
 
 // ------------------------------------------------------
-// Mises à jour UI
+// Mises à jour UI & Événements
 // ------------------------------------------------------
 
 function updateFireStatus() {
@@ -481,7 +589,6 @@ function updateFireStatus() {
 function updateFireSliderLabel(index) {
   const slider = document.getElementById("time-slider");
   const timeDisplay = document.getElementById("time-display");
-
   const step = timeSteps[index];
   if (!step) return;
 
@@ -489,20 +596,14 @@ function updateFireSliderLabel(index) {
   if (timeDisplay) timeDisplay.textContent = step.label;
 }
 
-// ------------------------------------------------------
-// Événements et Initialisation
-// ------------------------------------------------------
-
 export function initUI() {
   const playBtn = document.getElementById("btn-play");
-  if (playBtn) {
-    playBtn.addEventListener("click", togglePlay);
-  }
+  if (playBtn) playBtn.addEventListener("click", togglePlay);
 
   const slider = document.getElementById("time-slider");
   if (slider) {
     slider.addEventListener("input", (event) => {
-      if (isPlaying) togglePlay(); // Pause la lecture automatique lors de la manipulation
+      if (isPlaying) togglePlay();
       const index = Number(event.target.value);
       renderStep(index);
       updateFireSliderLabel(index);
@@ -517,77 +618,5 @@ export function initUI() {
   }
 }
 
-/**
- * Convertit la lettre/code du CSV NASA en nom exact du satellite
- */
-function getFullSatelliteName(satCode, sourceName) {
-  const sat = String(satCode || "")
-    .trim()
-    .toUpperCase();
-  const source = String(sourceName || "")
-    .trim()
-    .toUpperCase();
-
-  // 1. Détection basée sur la source "VIIRS SNPP"
-  if (source.includes("SNPP")) {
-    return "Suomi NPP (VIIRS)";
-  }
-
-  // 2. Détection basée sur la source "VIIRS NOAA20"
-  if (source.includes("NOAA20") || source.includes("NOAA-20")) {
-    return "NOAA-20 (JPSS-1 / VIIRS)";
-  }
-
-  // 3. Détection basée sur la source "MODIS" (Lettres T ou A)
-  if (source.includes("MODIS")) {
-    if (sat === "T" || sat.includes("TERRA")) return "Terra (EOS / MODIS)";
-    if (sat === "A" || sat.includes("AQUA")) return "Aqua (EOS / MODIS)";
-    return "Terra / Aqua (MODIS)";
-  }
-
-  // 4. Décodage secours par le code direct du satellite
-  switch (sat) {
-    case "NPP":
-    case "SNPP":
-      return "Suomi NPP (VIIRS)";
-    case "N":
-    case "NOAA20":
-    case "NOAA-20":
-    case "1":
-      return "NOAA-20 (JPSS-1 / VIIRS)";
-    case "N21":
-    case "NOAA21":
-    case "2":
-      return "NOAA-21 (JPSS-2 / VIIRS)";
-    case "T":
-      return "Terra (EOS / MODIS)";
-    case "A":
-      return "Aqua (EOS / MODIS)";
-    default:
-      return satCode ? `Satellite (${satCode})` : sourceName || "Inconnu";
-  }
-}
-
-// Dictionnaire d'identification des satellites de détection NASA
-const SATELLITE_NAMES = {
-  // VIIRS / JPSS
-  NOAA20: "NOAA-20 (JPSS-1 / VIIRS)",
-  "NOAA-20": "NOAA-20 (JPSS-1 / VIIRS)",
-  N20: "NOAA-20 (JPSS-1 / VIIRS)",
-  NPP: "Suomi NPP (VIIRS)",
-  SNPP: "Suomi NPP (VIIRS)",
-  VIIRS_SNPP_NRT: "Suomi NPP (VIIRS)",
-  VIIRS_NOAA20_NRT: "NOAA-20 (VIIRS)",
-  NOAA21: "NOAA-21 (JPSS-2 / VIIRS)",
-  N21: "NOAA-21 (JPSS-2 / VIIRS)",
-
-  // MODIS / EOS
-  A: "Aqua (MODIS)",
-  AQUA: "Aqua (MODIS)",
-  T: "Terra (MODIS)",
-  TERRA: "Terra (MODIS)",
-  MODIS_NRT: "Terra / Aqua (MODIS)",
-};
-
-// Initialisation au chargement du module
+// Initialisation au chargement
 initUI();

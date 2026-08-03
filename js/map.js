@@ -1,119 +1,68 @@
-export const canvasRenderer = L.canvas({
-  padding: 0.5,
-});
+// ✅ Import ESM direct depuis le CDN pour éviter l'erreur "bare specifier"
 
-export const map = L.map("map", {
-  center: [44.56, -0.52], // Centré sur le Sud-Ouest / Gironde
+// Initialisation de la carte MapLibre GL JS avec les flux IGN Géoplateforme
+export const map = new maplibregl.Map({
+  
+  container: "map",
+  style: {
+    version: 8,
+    // ✅ Requis pour l'affichage des textes (labels/text-field) dans MapLibre GL
+    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    sources: {
+      // 1. Plan IGN (Fond topographique récent)
+      "ign-plan": {
+        type: "raster",
+        tiles: [
+          "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png",
+        ],
+        tileSize: 256,
+        attribution: "© IGN - Géoplateforme",
+      },
+      // 2. Orthophotos IGN (Photographies aériennes HD récentes)
+      "ign-ortho": {
+        type: "raster",
+        tiles: [
+          "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg",
+        ],
+        tileSize: 256,
+        attribution: "© IGN - Photos Aériennes",
+      },
+    },
+    layers: [
+      {
+        id: "ign-ortho-layer",
+        type: "raster",
+        source: "ign-ortho",
+        minzoom: 0,
+        maxzoom: 19,
+        layout: { visibility: "visible" },
+      },
+      {
+        id: "ign-plan-layer",
+        type: "raster",
+        source: "ign-plan",
+        minzoom: 0,
+        maxzoom: 19,
+        layout: { visibility: "none" }, // Masqué par défaut
+      },
+    ],
+  },
+  center: [-0.52, 44.56], // [Longitude, Latitude] - Sud-Ouest / Gironde
   zoom: 9,
-  renderer: canvasRenderer,
-  preferCanvas: true,
-  zoomSnap: 0.5,
-  tap: true,
 });
 
-// --- COUCHES DE BASE ---
-export const satelliteLayer = L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {
-    maxZoom: 19,
-    attribution: "Tiles © Esri",
-  },
-).addTo(map);
+// Ajout du contrôle de navigation standard (Zoom / Boussole)
+map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-// --- COUCHES SUPERPOSÉES ---
-export const roadsLayer = L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
-  {
-    maxZoom: 19,
-    pane: "overlayPane",
-  },
-).addTo(map);
-
-export const placesLayer = L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-  {
-    maxZoom: 19,
-    pane: "overlayPane",
-  },
-).addTo(map);
-
-// Couche principale pour les feux NASA
-export const fireLayer = L.layerGroup().addTo(map);
-
-// --- ✈️ SÉPARATION DES CALQUES AÉRIENS ---
-export const fireAircraftLayer = L.layerGroup().addTo(map);       // Avions de lutte & secours (toujours visible)
-export const commercialAircraftLayer = L.layerGroup().addTo(map); // Autres avions (commercial, militaire, etc.)
-
-export const windLayer = L.layerGroup().addTo(map);
-
-// --- 🔥 ZONES BRÛLÉES WMS EFFIS (COPERNICUS CORRIGÉ) ---
-export const effisBurnedAreas = L.tileLayer.wms(
-  "https://effis-gwis-cms.jrc.ec.europa.eu/geoserver/wms",
-  {
-    layers: "effis:effis.ba.current",
-    format: "image/png",
-    transparent: true,
-    version: "1.1.1",
-    crs: L.CRS.EPSG3857,
-    attribution: "© Copernicus EFFIS",
-  }
-).addTo(map);
-
-// --- CONTRÔLE DES COUCHES LEAFLET ---
-export const layerControl = L.control
-  .layers(
-    {
-      Satellite: satelliteLayer,
-    },
-    {
-      "🔥 Zones Brûlées (NASA / FIRMS)": fireLayer,
-      "🔥 Polygones EFFIS (Copernicus)": effisBurnedAreas,
-      "✈️ Avions Commerciaux": commercialAircraftLayer,
-      "🌬️ Vent": windLayer,
-      Routes: roadsLayer,
-      Villes: placesLayer,
-    },
-    { collapsed: false }
-  )
-  .addTo(map);
-
-// --- BOUTON TOGGLE DU MENU DE COUCHES ---
-const layersContainer = document.querySelector(".leaflet-control-layers");
-
-if (layersContainer) {
-  const toggleHeader = document.createElement("div");
-  toggleHeader.className = "layers-toggle-header";
-  toggleHeader.innerHTML = `
-    <span>🗺️ Affichage</span>
-    <span class="layers-toggle-icon is-collapsed" id="layers-toggle-icon">▼</span>
-  `;
-
-  layersContainer.insertBefore(toggleHeader, layersContainer.firstChild);
-
-  const layersList = document.querySelector(".leaflet-control-layers-list");
-  const toggleIcon = document.getElementById("layers-toggle-icon");
-
-  if (layersList) {
-    layersList.classList.add("is-collapsed");
-  }
-
-  toggleHeader.addEventListener("click", () => {
-    const isCollapsed = layersList.classList.toggle("is-collapsed");
-    toggleIcon.classList.toggle("is-collapsed", isCollapsed);
-  });
-}
-
-// --- ÉCOUTEURS D'ÉVÉNEMENTS : GESTION DU VENT SUR LA CARTE ---
-map.on("overlayadd", function (eventLayer) {
-  if (eventLayer.name === "🌬️ Vent") {
-    const velocityCanvas = document.querySelector(".velocity-overlay");
-    if (velocityCanvas) velocityCanvas.style.display = "block";
+// Attente du chargement complet du style
+export const mapReady = new Promise((resolve) => {
+  if (map.isStyleLoaded()) {
+    resolve();
+  } else {
+    map.on("load", resolve);
   }
 });
 
-map.on("overlayremove", function (eventLayer) {
-  if (eventLayer.name === "🌬️ Vent") {
-    const velocityCanvas = document.querySelector(".velocity-overlay");
-    if (velocityCanvas) velocityCanvas.style.display = "none";
-  }
-});
+// Collections (Maps) pour stocker et séparer les marqueurs d'avions MapLibre
+export const commercialAircraftLayer = new Map();
+export const fireAircraftLayer = new Map();

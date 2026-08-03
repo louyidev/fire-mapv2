@@ -1,67 +1,106 @@
-import { map } from "./map.js";
-import { termLog, updateStatus } from "./ui.js";
+import maplibregl from "https://esm.sh/maplibre-gl@4.7.1";
+import { map, mapReady } from "./map.js";
 
-let burnedAreaLayer = null;
+// Remplacez par l'URL effective de votre Worker Cloudflare
+const WORKER_BURNED_URL = "https://square-frog-f706.louyidev.workers.dev/burned";
+
+let effisPopup = null;
 
 export async function loadBurnedAreas() {
-  termLog("Chargement des zones brûlées via Proxy Cloudflare...");
+  console.log("🔥 Chargement des surfaces brûlées via le Worker...");
 
-  // Nettoyage si la couche existe déjà
-  if (burnedAreaLayer && map.hasLayer(burnedAreaLayer)) {
-    map.removeLayer(burnedAreaLayer);
+  try {
+    await mapReady;
+
+    const response = await fetch(WORKER_BURNED_URL);
+    if (!response.ok) {
+      throw new Error(`Worker HTTP ${response.status}`);
+    }
+
+    const geojson = await response.json();
+    console.log("🔥 Surfaces brûlées reçues :", geojson.features ? geojson.features.length : 0);
+
+    if (!geojson.features || geojson.features.length === 0) {
+      console.warn("⚠️ Aucune zone brûlée renvoyée par l'API.");
+      return;
+    }
+
+    if (!map.getSource("effis-burned-source")) {
+      map.addSource("effis-burned-source", {
+        type: "geojson",
+        data: geojson,
+      });
+
+      map.addLayer({
+        id: "effis-burned-fill",
+        type: "fill",
+        source: "effis-burned-source",
+        paint: {
+          "fill-color": "#ff4500",
+          "fill-opacity": 0.4,
+        },
+      });
+
+      map.addLayer({
+        id: "effis-burned-outline",
+        type: "line",
+        source: "effis-burned-source",
+        paint: {
+          "line-color": "#cc0000",
+          "line-width": 1.5,
+        },
+      });
+
+      addEffisEvents();
+    } else {
+      map.getSource("effis-burned-source").setData(geojson);
+    }
+
+    console.log("🔥 Couche EFFIS ajoutée avec succès");
+  } catch (error) {
+    console.error("Erreur chargement EFFIS depuis le Worker :", error);
   }
-
-  // Création du Pane Leaflet
-  if (!map.getPane("burnedAreaPane")) {
-    map.createPane("burnedAreaPane");
-    map.getPane("burnedAreaPane").style.zIndex = 400; // Sous les feux actifs
-  }
-
-  // URL pointant directement sur ton Worker Cloudflare
-  const proxyWmsUrl = "https://square-frog-f706.louyidev.workers.dev/burned-areas";
-
-  burnedAreaLayer = L.tileLayer.wms(proxyWmsUrl, {
-    layers: "MODIS_Combined_Value_Added_Burn_Date",
-    format: "image/png",
-    transparent: true,
-    version: "1.1.1", // Standard ultra-compatible avec Leaflet
-    opacity: 0.85,
-    pane: "burnedAreaPane",
-    attribution: "NASA GIBS / MODIS",
-  });
-
-  // Écouteurs de statut
-  burnedAreaLayer.on("loading", () => {
-    console.log("⏳ [BurnedAreas] Requêtes envoyées au Worker...");
-  });
-
-  burnedAreaLayer.on("load", () => {
-    console.log("✅ [BurnedAreas] Tuiles reçues et affichées !");
-  });
-
-  burnedAreaLayer.on("tileerror", (err) => {
-    console.error("❌ [BurnedAreas] Erreur sur une tuile via le proxy :", err);
-  });
-
-  burnedAreaLayer.addTo(map);
-
-  updateStatus("🔥 Zones brûlées chargées");
 }
 
-// Activer / Masquer
-export function toggleBurnedAreas(visible) {
-  if (!burnedAreaLayer) {
-    if (visible) loadBurnedAreas();
-    return;
-  }
+function addEffisEvents() {
+  map.on("click", "effis-burned-fill", (event) => {
+    const feature = event.features[0];
+    const p = feature.properties;
 
-  if (visible) {
-    if (!map.hasLayer(burnedAreaLayer)) {
-      burnedAreaLayer.addTo(map);
+    const html = `
+      <div class="fire-popup-header">
+        <span class="fire-title">🔥 Zone brûlée EFFIS</span>
+      </div>
+      <div class="fire-popup-body">
+        <div class="fire-info-grid">
+          <span class="fire-label">Pays</span>
+          <span class="fire-value">${p.COUNTRY ?? "-"}</span>
+          <span class="fire-label">Surface</span>
+          <span class="fire-value">${p.AREA_HA ?? "-"} ha</span>
+          <span class="fire-label">Date</span>
+          <span class="fire-value">${p.FIREDATE ?? "-"}</span>
+        </div>
+      </div>
+    `;
+
+    if (effisPopup) {
+      effisPopup.remove();
     }
-  } else {
-    if (map.hasLayer(burnedAreaLayer)) {
-      map.removeLayer(burnedAreaLayer);
-    }
-  }
+
+    effisPopup = new maplibregl.Popup({
+      closeButton: true,
+      offset: 10,
+    })
+      .setLngLat(event.lngLat)
+      .setHTML(html)
+      .addTo(map);
+  });
+
+  map.on("mouseenter", "effis-burned-fill", () => {
+    map.getCanvas().style.cursor = "pointer";
+  });
+
+  map.on("mouseleave", "effis-burned-fill", () => {
+    map.getCanvas().style.cursor = "";
+  });
 }

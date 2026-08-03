@@ -99,6 +99,10 @@ body {
   font-weight: bold;
 }
 
+#aircraft-filter-panel {
+  padding-top: 8px;
+}
+
 .spinner {
   width: 12px;
   height: 12px;
@@ -553,41 +557,38 @@ input[type="range"]::-moz-range-thumb:hover {
    Aéronefs, Vent & Incendies
    ====================================================== */
 
-/* --- CONTENEUR GLOBAL LEAFLET --- */
-.leaflet-popup-content-wrapper {
+/* ======================================================
+   POPUPS MAPLIBRE
+   ====================================================== */
+
+.maplibregl-popup-content {
   background: rgba(15, 23, 42, 0.9) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(56, 189, 248, 0.2) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
-  color: #f8fafc !important;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color: #f8fafc;
   padding: 0 !important;
   overflow: hidden;
+  max-width: 286px;
+  font-family: inherit;
+  font-size: 0.75rem;
 }
 
-.leaflet-popup-tip {
-  background: rgba(15, 23, 42, 0.9) !important;
-  border: 1px solid rgba(56, 189, 248, 0.2) !important;
-  box-shadow: none !important;
+.maplibregl-popup-tip {
+  border-top-color: rgba(15, 23, 42, 0.9) !important;
 }
 
-.leaflet-popup-close-button {
-  color: #94a3b8 !important;
-  font-size: 16px !important;
-  padding: 8px 10px 0 0 !important;
+.maplibregl-popup-close-button {
+  color: #94a3b8;
+  font-size: 16px;
+  padding: 8px 10px 0 0;
   transition: color 0.2s ease;
 }
 
-.leaflet-popup-close-button:hover {
-  color: #38bdf8 !important;
-}
-
-.leaflet-popup-content {
-  margin: 0 !important;
-  max-width: 286px !important;
-  font-family: inherit !important;
-  font-size: 0.75rem !important;
+.maplibregl-popup-close-button:hover {
+  color: #38bdf8;
 }
 
 /* --- EN-TÊTES (HEADERS) --- */
@@ -732,3 +733,4 @@ input[type="range"]::-moz-range-thumb:hover {
 .leaflet-burnedAreaPane-pane {
   mix-blend-mode: color-dodge; /* Permet un effet d'incandescence très propre sur fond sombre */
 }
+
