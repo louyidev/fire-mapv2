@@ -79,8 +79,8 @@ const AIRCRAFT_TYPES = {
     manufacturer: "Aérospatiale / Airbus Helicopters",
     model: "SA 330 Puma",
   },
-  BE20: { manufacturer: "Beechcraft", model: "Super King Air 200" }, // 👈 Ajouté
-  BE30: { manufacturer: "Beechcraft", model: "Super King Air 300" }, // Optionnel
+  BE20: { manufacturer: "Beechcraft", model: "Super King Air 200" },
+  BE30: { manufacturer: "Beechcraft", model: "Super King Air 300" },
 };
 
 // 1. Appareils dédiés à la lutte incendie (Canadair, Dash bombardier d'eau, Air Tractor)
@@ -100,8 +100,8 @@ const RESCUE_RULES = {
 // 3. Règles hélicoptères génériques (si non spécifié secours ou armée)
 const HELICOPTER_RULES = {
   types: [
-    "AS50", // 👈 Ajouté (Aérospatiale / Eurocopter AS350 Écureuil)
-    "AS35", // 👈 Ajouté (variante ICAO)
+    "AS50",
+    "AS35",
     "EC35",
     "EC45",
     "EC55",
@@ -123,7 +123,7 @@ const HELICOPTER_RULES = {
   ],
   typeIncludes: [
     "PUMA",
-    "AS3",  // 👈 En remplaçant AS32/33/53 par AS3, vous couvrez tous les AS350, AS355, AS332...
+    "AS3",
     "EC45",
     "H145",
     "NH90",
@@ -431,7 +431,7 @@ function createAircraftElement(aircraft) {
   ) {
     iconPath = "./assets/airtractor.svg";
   } else if (category === "🚑 SAMU / Secours") {
-    iconPath = "./assets/rescue.svg"; // Assure-toi d'avoir cette icône ou utilise helicopter.svg
+    iconPath = "./assets/rescue.svg";
   } else if (category === "🪖 Militaire") {
     iconPath = "./assets/military.svg";
   } else if (category === "🚁 Hélicoptère") {
@@ -570,7 +570,6 @@ export async function loadAircrafts() {
 
 function parseAircrafts(data) {
   return (data.ac ?? [])
-  
     .map((aircraft) => {
       const hex = (aircraft.hex ?? "").toLowerCase();
       const callsign = aircraft.flight?.trim();
@@ -660,7 +659,7 @@ function renderAircrafts(aircrafts) {
         marker,
         element: el,
         currentTrack: aircraft.track,
-        lastSeen: now, // 👈 On enregistre l'heure de dernière détection
+        lastSeen: now, // Enregistrement de l'heure de dernière détection
       };
 
       aircraftMarkers.set(hex, markerData);
@@ -688,7 +687,7 @@ function renderAircrafts(aircrafts) {
         ANIMATION_DURATION
       );
     } else {
-      // 👈 Mise à jour de l'horodatage
+      // Mise à jour de l'horodatage
       markerData.lastSeen = now;
 
       markerData.element.style.display = isVisible ? "block" : "none";
@@ -739,7 +738,7 @@ function renderAircrafts(aircrafts) {
     markerData.currentTrack = aircraft.track;
   });
 
-  // 🧹 NETTOYAGE INTELLIGENT : On ne supprime que si l'avion n'a pas été vu depuis plus de AIRCRAFT_TTL (30s)
+  // Nettoyage : suppression si l'avion n'a pas été vu depuis plus de AIRCRAFT_TTL (30s)
   aircraftMarkers.forEach((markerData, hex) => {
     if (now - markerData.lastSeen > AIRCRAFT_TTL) {
       markerData.marker.remove();

@@ -33,6 +33,16 @@ body {
   z-index: 1;
 }
 
+/* Forcer le conteneur des popups MapLibre au-dessus du canvas de vent */
+.maplibregl-popup {
+  z-index: 10 !important;
+}
+
+/* Si tu utilises des marqueurs DOM (HTML Marker) pour les avions ou les feux */
+.maplibregl-marker {
+  z-index: 5 !important;
+}
+
 /* Base commune pour tous les panneaux (Glassmorphism) */
 .last-update-banner,
 .info-card,
@@ -186,6 +196,7 @@ body {
   align-items: center;
   gap: 3px;
 }
+
 
 /* ======================================================
    4. SLIDERS ULTRA-COMPACTS (BAS DE PAGE)
@@ -705,6 +716,7 @@ input[type="range"]::-moz-range-thumb:hover {
   border-radius: 8px;
   padding: 6px;
   text-align: center;
+  justify-content: space-around;
 }
 
 .telemetry-item {

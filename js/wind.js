@@ -22,14 +22,28 @@ let animationFrameId = null;
 let particles = [];
 let lastFrameTime = 0;
 let pixelRatio = 1;
-const PARTICLE_COUNT = 1700;
+
+// ⚡ OPTIMISATION 1 : Nombre de particules adapté à l'écran tout en conservant la densité
+const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+const PARTICLE_COUNT = isMobile ? 800 : 1600;
+
 const MAX_PARTICLE_AGE = 3.2;
 const WIND_PIXELS_PER_SECOND_PER_MS = 5;
-const WIND_FADE = 0.9;
+const WIND_FADE = 0.88; // Fondu légèrement ajusté pour des traînées plus douces
+
+// ⚡ OPTIMISATION 2 : Cache de la grille de vent en pixels écran
+let pixelGrid = null;
+let pixelGridWidth = 0;
+let pixelGridHeight = 0;
+const PIXEL_STEP = isMobile ? 12 : 8; // Résolution du champ vectoriel en pixels
 
 function makeGridKey(lat, lng) {
-  const roundLat = (Math.round(lat / WIND_GRID.step) * WIND_GRID.step).toFixed(2);
-  const roundLng = (Math.round(lng / WIND_GRID.step) * WIND_GRID.step).toFixed(2);
+  const roundLat = (Math.round(lat / WIND_GRID.step) * WIND_GRID.step).toFixed(
+    2,
+  );
+  const roundLng = (Math.round(lng / WIND_GRID.step) * WIND_GRID.step).toFixed(
+    2,
+  );
   return `${roundLat},${roundLng}`;
 }
 
@@ -47,7 +61,8 @@ export async function loadWind() {
     const batchSize = 80;
     const fetchPromises = [];
 
-    const params = "hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,weather_code";
+    const params =
+      "hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,weather_code";
 
     for (let i = 0; i < points.length; i += batchSize) {
       const chunk = points.slice(i, i + batchSize);
@@ -55,10 +70,12 @@ export async function loadWind() {
       const lngs = chunk.map((p) => p.lng).join(",");
 
       fetchPromises.push(
-        fetch(`${WEATHER_PROXY}?lats=${lats}&lngs=${lngs}&${params}`).then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.json();
-        })
+        fetch(`${WEATHER_PROXY}?lats=${lats}&lngs=${lngs}&${params}`).then(
+          (res) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          },
+        ),
       );
     }
 
@@ -73,9 +90,7 @@ export async function loadWind() {
 
     buildGridIndex();
 
-    console.log(
-      `🌬️ Données météo reçues et indexées pour ${windDataPoints.length} points`
-    );
+    console.log(`🌬️ Données météo reçues pour ${windDataPoints.length} points`);
 
     setupParticleCanvas();
     setupWindSlider();
@@ -97,28 +112,69 @@ function buildGridIndex() {
 }
 
 // ------------------------------------------------------
-// Reverse Geocoding (Ville la plus proche)
+// Cache Pixels (Le secret de la fluidité)
 // ------------------------------------------------------
 
-async function getCityName(lat, lng) {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const addr = data.address || {};
-    return (
-      addr.city ||
-      addr.town ||
-      addr.village ||
-      addr.municipality ||
-      addr.county ||
-      null
-    );
-  } catch (err) {
+function updatePixelGridCache() {
+  if (!canvasOverlay || windDataPoints.length === 0) return;
+
+  const rect = map.getCanvas().getBoundingClientRect();
+  const width = rect.width;
+  const height = rect.height;
+
+  const cols = Math.ceil(width / PIXEL_STEP) + 1;
+  const rows = Math.ceil(height / PIXEL_STEP) + 1;
+
+  pixelGridWidth = cols;
+  pixelGridHeight = rows;
+  pixelGrid = new Float32Array(cols * rows * 3); // Stocke [u, v, speed]
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const px = c * PIXEL_STEP;
+      const py = r * PIXEL_STEP;
+
+      const lngLat = map.unproject([px, py]);
+      const vector = getInterpolatedWindAt(lngLat.lng, lngLat.lat);
+
+      const index = (r * cols + c) * 3;
+      if (vector) {
+        pixelGrid[index] = vector.u;
+        pixelGrid[index + 1] = vector.v;
+        pixelGrid[index + 2] = vector.speed;
+      } else {
+        pixelGrid[index] = 0;
+        pixelGrid[index + 1] = 0;
+        pixelGrid[index + 2] = 0;
+      }
+    }
+  }
+}
+
+function getCachedVectorAt(x, y) {
+  if (!pixelGrid) return null;
+
+  const c = x / PIXEL_STEP;
+  const r = y / PIXEL_STEP;
+
+  const c0 = Math.floor(c);
+  const r0 = Math.floor(r);
+
+  if (
+    c0 < 0 ||
+    c0 >= pixelGridWidth - 1 ||
+    r0 < 0 ||
+    r0 >= pixelGridHeight - 1
+  ) {
     return null;
   }
+
+  const index = (r0 * pixelGridWidth + c0) * 3;
+  return {
+    u: pixelGrid[index],
+    v: pixelGrid[index + 1],
+    speed: pixelGrid[index + 2],
+  };
 }
 
 // ------------------------------------------------------
@@ -137,7 +193,7 @@ function setupParticleCanvas() {
   canvasOverlay.style.width = "100%";
   canvasOverlay.style.height = "100%";
   canvasOverlay.style.pointerEvents = "none";
-  canvasOverlay.style.zIndex = "2";
+  canvasOverlay.style.zIndex = "1";
 
   container.appendChild(canvasOverlay);
   ctxOverlay = canvasOverlay.getContext("2d");
@@ -146,8 +202,12 @@ function setupParticleCanvas() {
 
   window.addEventListener("resize", resizeCanvas);
   map.on("resize", resizeCanvas);
-  map.on("move", resetParticles);
-  map.on("zoom", resetParticles);
+
+  // Recalcul de la grille uniquement quand l'utilisateur déplace/zoome la carte
+  map.on("moveend", () => {
+    updatePixelGridCache();
+    resetParticles();
+  });
 
   initParticles();
   startAnimation();
@@ -156,12 +216,17 @@ function setupParticleCanvas() {
 function resizeCanvas() {
   if (!canvasOverlay) return;
   const rect = map.getCanvas().getBoundingClientRect();
-  pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+
+  // ⚡ OPTIMISATION 3 : PixelRatio à 1 sur mobile pour diviser par 4 la charge du GPU
+  pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+
   canvasOverlay.width = Math.round(rect.width * pixelRatio);
   canvasOverlay.height = Math.round(rect.height * pixelRatio);
   ctxOverlay.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   ctxOverlay.clearRect(0, 0, rect.width, rect.height);
   lastFrameTime = 0;
+
+  updatePixelGridCache();
 }
 
 function initParticles() {
@@ -173,7 +238,6 @@ function initParticles() {
 
 function generateRandomParticle() {
   const { width, height } = map.getCanvas().getBoundingClientRect();
-
   return {
     x: Math.random() * width,
     y: Math.random() * height,
@@ -190,7 +254,7 @@ function resetParticles() {
 }
 
 // ------------------------------------------------------
-// Interpolation & Vecteurs
+// Interpolation Vent (Exécutée hors de la boucle 60FPS)
 // ------------------------------------------------------
 
 function getGridPointData(lat, lng) {
@@ -215,11 +279,17 @@ function getInterpolatedWindAt(lng, lat) {
   const step = WIND_GRID.step;
 
   const lat0 = Number(
-    (Math.floor((lat - WIND_GRID.minLat) / step) * step + WIND_GRID.minLat).toFixed(2)
+    (
+      Math.floor((lat - WIND_GRID.minLat) / step) * step +
+      WIND_GRID.minLat
+    ).toFixed(2),
   );
   const lat1 = Number((lat0 + step).toFixed(2));
   const lng0 = Number(
-    (Math.floor((lng - WIND_GRID.minLng) / step) * step + WIND_GRID.minLng).toFixed(2)
+    (
+      Math.floor((lng - WIND_GRID.minLng) / step) * step +
+      WIND_GRID.minLng
+    ).toFixed(2),
   );
   const lng1 = Number((lng0 + step).toFixed(2));
 
@@ -240,20 +310,18 @@ function getInterpolatedWindAt(lng, lat) {
     v01.u * x * (1 - y) +
     v10.u * (1 - x) * y +
     v11.u * x * y;
-
   const v =
     v00.v * (1 - x) * (1 - y) +
     v01.v * x * (1 - y) +
     v10.v * (1 - x) * y +
     v11.v * x * y;
-
   const speed = Math.hypot(u, v);
 
   return { u, v, speed };
 }
 
 // ------------------------------------------------------
-// Rendu d'Animation Canvas
+// Rendu d'Animation (Ultrarapide)
 // ------------------------------------------------------
 
 function startAnimation() {
@@ -273,6 +341,8 @@ function drawFrame(frameScale) {
   if (!ctxOverlay || !canvasOverlay) return;
 
   const { width, height } = map.getCanvas().getBoundingClientRect();
+
+  // Traînée du vent
   ctxOverlay.fillStyle = `rgba(0, 0, 0, ${WIND_FADE})`;
   ctxOverlay.globalCompositeOperation = "destination-in";
   ctxOverlay.fillRect(0, 0, width, height);
@@ -288,16 +358,19 @@ function drawFrame(frameScale) {
       continue;
     }
 
-    const position = map.unproject([p.x, p.y]);
-    const vector = getInterpolatedWindAt(position.lng, position.lat);
+    // ⚡ LECTURE ULTRA RAPIDE EN CACHE
+    const vector = getCachedVectorAt(p.x, p.y);
+
     if (!vector || vector.speed === 0) {
       particles[i] = generateRandomParticle();
       continue;
     }
 
     const seconds = frameScale / 60;
-    const endX = p.x + (vector.u / 3.6) * WIND_PIXELS_PER_SECOND_PER_MS * seconds;
-    const endY = p.y - (vector.v / 3.6) * WIND_PIXELS_PER_SECOND_PER_MS * seconds;
+    const endX =
+      p.x + (vector.u / 3.6) * WIND_PIXELS_PER_SECOND_PER_MS * seconds;
+    const endY =
+      p.y - (vector.v / 3.6) * WIND_PIXELS_PER_SECOND_PER_MS * seconds;
     p.age += seconds;
 
     if (endX < 0 || endX > width || endY < 0 || endY > height) {
@@ -328,18 +401,44 @@ function getWindColor(speedMs) {
 }
 
 // ------------------------------------------------------
-// Helpers Météo
+// Reverse Geocoding & Helpers Météo
 // ------------------------------------------------------
+
+async function getCityName(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const addr = data.address || {};
+    return (
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.county ||
+      null
+    );
+  } catch (err) {
+    return null;
+  }
+}
 
 function getWeatherDescription(code) {
   if (code === undefined || code === null) return null;
   const numericCode = Number(code);
   if (numericCode === 0) return { label: "Ensoleillé", icon: "☀️" };
-  if (numericCode >= 1 && numericCode <= 3) return { label: "Nuageux", icon: "⛅" };
-  if (numericCode >= 45 && numericCode <= 48) return { label: "Brouillard", icon: "🌫️" };
-  if (numericCode >= 51 && numericCode <= 67) return { label: "Pluie", icon: "🌧️" };
-  if (numericCode >= 71 && numericCode <= 77) return { label: "Neige", icon: "❄️" };
-  if (numericCode >= 80 && numericCode <= 82) return { label: "Averses", icon: "🌦️" };
+  if (numericCode >= 1 && numericCode <= 3)
+    return { label: "Nuageux", icon: "⛅" };
+  if (numericCode >= 45 && numericCode <= 48)
+    return { label: "Brouillard", icon: "🌫️" };
+  if (numericCode >= 51 && numericCode <= 67)
+    return { label: "Pluie", icon: "🌧️" };
+  if (numericCode >= 71 && numericCode <= 77)
+    return { label: "Neige", icon: "❄️" };
+  if (numericCode >= 80 && numericCode <= 82)
+    return { label: "Averses", icon: "🌦️" };
   if (numericCode >= 95) return { label: "Orage", icon: "🌩️" };
   return { label: "Météo", icon: "🌡️" };
 }
@@ -351,23 +450,29 @@ function getWeatherIcon(code) {
 
 function extractTemp(hourlyObj, index) {
   if (!hourlyObj) return null;
-
-  const directValue = hourlyObj.temperature_2m?.[index] ?? hourlyObj.temperature?.[index] ?? hourlyObj.temp?.[index];
-  if (directValue !== undefined && directValue !== null) {
+  const directValue =
+    hourlyObj.temperature_2m?.[index] ??
+    hourlyObj.temperature?.[index] ??
+    hourlyObj.temp?.[index];
+  if (directValue !== undefined && directValue !== null)
     return Number(directValue);
-  }
 
-  const tempKey = Object.keys(hourlyObj).find(k => k.toLowerCase().includes("temp"));
-  if (tempKey && hourlyObj[tempKey]?.[index] !== undefined && hourlyObj[tempKey]?.[index] !== null) {
+  const tempKey = Object.keys(hourlyObj).find((k) =>
+    k.toLowerCase().includes("temp"),
+  );
+  if (
+    tempKey &&
+    hourlyObj[tempKey]?.[index] !== undefined &&
+    hourlyObj[tempKey]?.[index] !== null
+  ) {
     return Number(hourlyObj[tempKey][index]);
   }
-
   return null;
 }
 
 function getDayMinMaxTemp(hourlyObj, currentIndex) {
-  if (!hourlyObj || !hourlyObj.time || !hourlyObj.time[currentIndex]) return null;
-
+  if (!hourlyObj || !hourlyObj.time || !hourlyObj.time[currentIndex])
+    return null;
   const targetDateStr = new Date(hourlyObj.time[currentIndex]).toDateString();
   const dayTemps = [];
 
@@ -386,7 +491,7 @@ function getDayMinMaxTemp(hourlyObj, currentIndex) {
   };
 }
 
-function get7DayForecast(hourlyObj, currentIndex) {
+function get5DayForecast(hourlyObj, currentIndex) {
   if (!hourlyObj || !hourlyObj.time) return [];
 
   const daysMap = new Map();
@@ -397,7 +502,7 @@ function get7DayForecast(hourlyObj, currentIndex) {
     const dateKey = dateObj.toDateString();
 
     if (!daysMap.has(dateKey)) {
-      if (daysMap.size >= 7) break;
+      if (daysMap.size >= 5) break;
       daysMap.set(dateKey, {
         dayLabel: dayNames[dateObj.getDay()],
         temps: [],
@@ -431,24 +536,17 @@ function get7DayForecast(hourlyObj, currentIndex) {
 
 function getArrowIcon(dirDeg, speedKmH = 0) {
   const rotation = (dirDeg + 180) % 360;
-
-  // Couleur dynamique selon l'intensité du vent (km/h)
-  let color = "#38bdf8"; // Vent léger (bleu ciel)
+  let color = "#38bdf8";
   if (speedKmH >= 45) {
-    color = "#f43f5e"; // Vent très fort / tempête (rouge rose)
+    color = "#f43f5e";
   } else if (speedKmH >= 25) {
-    color = "#fbbf24"; // Vent modéré (ambre/orange)
+    color = "#fbbf24";
   }
 
   return `
-    <span style="display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; transform: rotate(${rotation}deg); vertical-align: middle;">
+    <span style="display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; transform: rotate(${rotation}deg); vertical-align: middle; flex-shrink: 0;">
       <svg viewBox="0 0 24 24" width="16" height="16" style="filter: drop-shadow(0px 1px 2px rgba(0,0,0,0.6));">
-        <path 
-          d="M12 2L4.5 20.29C4.21 21 4.96 21.7 5.63 21.37L12 18.25L18.37 21.37C19.04 21.7 19.79 21 19.5 20.29L12 2Z" 
-          fill="${color}" 
-          stroke="rgba(0,0,0,0.3)" 
-          stroke-width="1"
-        />
+        <path d="M12 2L4.5 20.29C4.21 21 4.96 21.7 5.63 21.37L12 18.25L18.37 21.37C19.04 21.7 19.79 21 19.5 20.29L12 2Z" fill="${color}" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
       </svg>
     </span>
   `;
@@ -462,7 +560,9 @@ function setupMapClick() {
   map.on("click", async (e) => {
     const targetEl = e.originalEvent?.target;
     if (targetEl) {
-      const isAircraftDOM = targetEl.closest(".aircraft-marker, .mapboxgl-marker, .maplibregl-marker");
+      const isAircraftDOM = targetEl.closest(
+        ".aircraft-marker, .mapboxgl-marker, .maplibregl-marker",
+      );
       if (isAircraftDOM) {
         if (clickPopup) {
           clickPopup.remove();
@@ -522,10 +622,21 @@ function setupMapClick() {
       idx = findCurrentHourIndex();
     }
 
-    const speedKmH = Math.round(Number(hourly.wind_speed_10m?.[idx] ?? hourly.windspeed_10m?.[idx] ?? 0));
-    const dirDeg = Math.round(Number(hourly.wind_direction_10m?.[idx] ?? hourly.winddirection_10m?.[idx] ?? 0));
+    const speedKmH = Math.round(
+      Number(hourly.wind_speed_10m?.[idx] ?? hourly.windspeed_10m?.[idx] ?? 0),
+    );
+    const dirDeg = Math.round(
+      Number(
+        hourly.wind_direction_10m?.[idx] ??
+          hourly.winddirection_10m?.[idx] ??
+          0,
+      ),
+    );
     const gustRaw = hourly.wind_gusts_10m?.[idx] ?? hourly.windgusts_10m?.[idx];
-    const gustKmH = gustRaw !== undefined && gustRaw !== null ? Math.round(Number(gustRaw)) : null;
+    const gustKmH =
+      gustRaw !== undefined && gustRaw !== null
+        ? Math.round(Number(gustRaw))
+        : null;
 
     const directions = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
     const cardinalDir = directions[Math.round(dirDeg / 45) % 8];
@@ -550,24 +661,36 @@ function setupMapClick() {
     let forecastHTML = "";
     if (hourly.time) {
       const forecastItems = [];
-      // Pas de 4 heures : +4h, +8h, +12h, +16h
-      for (let i = 4; i <= 16; i += 4) {
+      // ✅ Pas de 2h au lieu de 4h
+      for (let i = 2; i <= 8; i += 2) {
         const nextIdx = idx + i;
         if (nextIdx < hourly.time.length) {
           const hour = new Date(hourly.time[nextIdx]).getHours();
-          
           const nextTempVal = extractTemp(hourly, nextIdx);
-          const nextTemp = nextTempVal !== null ? `${Math.round(nextTempVal)}°C` : "--";
-          
-          const nextIcon = getWeatherIcon(hourly.weather_code?.[nextIdx] ?? hourly.weathercode?.[nextIdx]);
-          
-          const nextSpeed = Math.round(Number(hourly.wind_speed_10m?.[nextIdx] ?? hourly.windspeed_10m?.[nextIdx] ?? 0));
-          const nextDirDeg = Math.round(Number(hourly.wind_direction_10m?.[nextIdx] ?? hourly.winddirection_10m?.[nextIdx] ?? 0));
+          const nextTemp =
+            nextTempVal !== null ? `${Math.round(nextTempVal)}°C` : "--";
+          const nextIcon = getWeatherIcon(
+            hourly.weather_code?.[nextIdx] ?? hourly.weathercode?.[nextIdx],
+          );
+          const nextSpeed = Math.round(
+            Number(
+              hourly.wind_speed_10m?.[nextIdx] ??
+                hourly.windspeed_10m?.[nextIdx] ??
+                0,
+            ),
+          );
+          const nextDirDeg = Math.round(
+            Number(
+              hourly.wind_direction_10m?.[nextIdx] ??
+                hourly.winddirection_10m?.[nextIdx] ??
+                0,
+            ),
+          );
           const nextCardinal = directions[Math.round(nextDirDeg / 45) % 8];
           const nextArrow = getArrowIcon(nextDirDeg, nextSpeed);
 
           forecastItems.push(`
-            <div style="text-align: center; font-size: 0.8em; flex: 1; padding: 4px 2px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+            <div style="text-align: center; flex: 1; padding: 4px 2px; background: rgba(255,255,255,0.05); border-radius: 6px;">
               <div style="opacity: 0.7; font-size: 0.85em;">${hour}h</div>
               <div style="margin: 2px 0; font-size: 1.1em;">${nextIcon}</div>
               <div style="font-weight: bold; color: #ffffff;">${nextTemp}</div>
@@ -582,7 +705,7 @@ function setupMapClick() {
       if (forecastItems.length > 0) {
         forecastHTML = `
           <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.15);">
-            <div style="font-size: 0.7em; opacity: 0.7; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase; font-weight: 600;">PRÉVISIONS (PAS DE 4H)</div>
+            <div style="font-size: 0.7em; opacity: 0.7; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase; font-weight: 600;">PRÉVISIONS (PAS DE 2H)</div>
             <div style="display: flex; justify-content: space-between; gap: 4px;">
               ${forecastItems.join("")}
             </div>
@@ -591,24 +714,24 @@ function setupMapClick() {
       }
     }
 
-    let forecast7DaysHTML = "";
-    const dailyForecast = get7DayForecast(hourly, idx);
+    let forecast5DaysHTML = "";
+    const dailyForecast = get5DayForecast(hourly, idx);
     if (dailyForecast.length > 0) {
       const dayItems = dailyForecast.map(
         (day) => `
-        <div style="text-align: center; font-size: 0.75em; flex: 1; padding: 4px 2px; background: rgba(255,255,255,0.03); border-radius: 6px;">
+        <div style="text-align: center; flex: 1; padding: 2px 6px; background: rgba(255,255,255,0.03); border-radius: 6px;">
           <div style="opacity: 0.8; font-size: 0.85em; font-weight: 600;">${day.dayLabel}</div>
           <div style="margin: 2px 0; font-size: 1em;">${day.icon}</div>
           <div style="font-size: 0.75em;">
             <span style="color: #60a5fa;">${day.min}°</span> <span style="color: #f87171;">${day.max}°</span>
           </div>
         </div>
-      `
+      `,
       );
 
-      forecast7DaysHTML = `
+      forecast5DaysHTML = `
         <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.15);">
-          <div style="font-size: 0.7em; opacity: 0.7; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase; font-weight: 600;">PRÉVISIONS (7 JOURS)</div>
+          <div style="font-size: 0.7em; opacity: 0.7; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase; font-weight: 600;">PRÉVISIONS (5 JOURS)</div>
           <div style="display: flex; justify-content: space-between; gap: 4px;">
             ${dayItems.join("")}
           </div>
@@ -630,7 +753,7 @@ function setupMapClick() {
               tempDisplay
                 ? `<div class="telemetry-item">
                     <span class="telemetry-label" style="display: block; font-size: 0.75em; opacity: 0.7; color: #cbd5e1;">TEMPÉRATURE</span>
-                    <span class="telemetry-value" style="font-size: 1.1em; font-weight: bold; color: #ffffff;">${tempDisplay}</span>
+                    <span class="telemetry-value" style="font-size: 1.4em; font-weight: bold; color: #ffffff;">${tempDisplay}</span>
                     ${
                       dayMinMax
                         ? `<div style="font-size: 0.75em; color: #cbd5e1; margin-top: 2px;">
@@ -643,21 +766,24 @@ function setupMapClick() {
             }
             <div class="telemetry-item">
               <span class="telemetry-label" style="display: block; font-size: 0.75em; opacity: 0.7; color: #cbd5e1;">VENT</span>
-              <span class="telemetry-value" style="font-size: 1.1em; font-weight: bold; color: #ffffff; display: flex; align-items: center; gap: 4px;">
-                ${windArrow} ${speedKmH} km/h (${cardinalDir})
+              <span class="telemetry-value" style="font-size: 1.4em; font-weight: bold; color: #ffffff; display: flex; align-items: baseline; gap: 2px;">
+                ${speedKmH} <span style="font-size: 0.6em; font-weight: normal;">km/h</span>
               </span>
+              <div style="font-size: 0.85em; color: #cbd5e1; display: flex; align-items: center; gap: 4px;">
+                ${windArrow} <span style="font-weight: 500;">${cardinalDir}</span>
+              </div>
             </div>
             ${
               gustKmH !== null
                 ? `<div class="telemetry-item">
                     <span class="telemetry-label" style="display: block; font-size: 0.75em; opacity: 0.7; color: #cbd5e1;">RAFALES</span>
-                    <span class="telemetry-value" style="font-size: 1.1em; font-weight: bold; color: #f43f5e;">${gustKmH} km/h</span>
+                    <span class="telemetry-value" style="font-size: 1.4em; font-weight: bold; color: #f43f5e; white-space: nowrap;">${gustKmH} <span style="font-size: 0.7em; font-weight: normal;">km/h</span></span>
                   </div>`
                 : ""
             }
           </div>
           ${forecastHTML}
-          ${forecast7DaysHTML}
+          ${forecast5DaysHTML}
         </div>
       </div>
     `;
@@ -666,6 +792,7 @@ function setupMapClick() {
       closeButton: true,
       offset: 10,
       closeOnClick: false,
+      maxWidth: "320px",
     })
       .setLngLat([clickedLng, clickedLat])
       .setHTML(popupContent("Recherche..."))
@@ -746,6 +873,9 @@ function updateWindTime(hourIndex) {
       label.textContent = `+${currentHourIndex}h`;
     }
   }
+
+  // Mettre à jour la grille de pixels quand l'heure change
+  updatePixelGridCache();
 }
 
 function setupWindSlider() {
