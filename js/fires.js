@@ -3,6 +3,22 @@ import { termLog, updateLastFireUpdate, updateStatus } from "./ui.js";
 
 const WORKER_URL = "https://square-frog-f706.louyidev.workers.dev";
 
+// ⚙️ PARAMÈTRES ANTI-FAUX POSITIFS & CLUSTERING
+const MIN_NEIGHBORS = 4; // Nombre minimal de voisins proches requis pour valider un incendie
+const SEARCH_RADIUS_KM = 25; // Rayon de recherche anti-bruit en km
+const CLUSTER_THRESHOLD = 10; // Seuil de foyers pour afficher le grand cercle de zone
+const CLUSTER_RADIUS_KM = 25; // Rayon d'agrégation des foyers pour former un mega-cluster
+
+// 🎨 CONFIGURATION DES CLUSTERS (Taille & Couleur)
+const CLUSTER_STYLE = {
+  fillColor: "#ff1a1a",      // Couleur de fond du cercle
+  fillOpacity: 0.12,         // Opacité de remplissage (0 à 1)
+  strokeColor: "#ff3300",    // Couleur de la bordure
+  strokeWidth: 1.5,          // Épaisseur de la bordure en px
+  strokeOpacity: 0.5,        // Opacité de la bordure (0 à 1)
+  scaleMultiplier: 0.2,      // Facteur multiplicateur pour grossir/réduire le rayon global
+};
+
 // 🚀 LOGO NASA STYLISÉ (SVG)
 const NASA_LOGO_SVG = `
 <svg class="nasa-logo" viewBox="0 0 192 159" width="22" height="18" style="vertical-align: middle; filter: drop-shadow(0px 1px 2px rgba(0,0,0,0.5));">
@@ -16,6 +32,7 @@ const NASA_LOGO_SVG = `
 `;
 
 let allFiresGeoJSON = { type: "FeatureCollection", features: [] };
+let fireClustersGeoJSON = { type: "FeatureCollection", features: [] };
 let timeSteps = [];
 let currentStepIndex = -1;
 let animationInterval = null;
@@ -39,14 +56,14 @@ const CATEGORY_LABELS = {
 };
 
 export const FIRE_STYLES = {
-  c1: { fillColor: "#fff200", color: "#ffffff", fillOpacity: 1, weight: 3 },
-  c2: { fillColor: "#ffd000", color: "#ffef9f", fillOpacity: 0.98, weight: 3 },
-  c3: { fillColor: "#ff9800", color: "#ff5e00", fillOpacity: 0.95, weight: 3 },
-  c4: { fillColor: "#ff5c00", color: "#d62828", fillOpacity: 0.9, weight: 2 },
-  c5: { fillColor: "#d62828", color: "#8b0000", fillOpacity: 0.8, weight: 2 },
-  c6: { fillColor: "#8b0000", color: "#4a0404", fillOpacity: 0.65, weight: 2 },
-  c7: { fillColor: "#4a0404", color: "#1f1f1f", fillOpacity: 0.45, weight: 1 },
-  c8: { fillColor: "#202020", color: "#000000", fillOpacity: 0.25, weight: 1 },
+  c1: { fillColor: "#fff200", color: "#ffffff", fillOpacity: 1, weight: 2 },
+  c2: { fillColor: "#ffd000", color: "#ffef9f", fillOpacity: 0.98, weight: 2 },
+  c3: { fillColor: "#ff9800", color: "#ff5e00", fillOpacity: 0.95, weight: 1.5 },
+  c4: { fillColor: "#ff5c00", color: "#d62828", fillOpacity: 0.9, weight: 1 },
+  c5: { fillColor: "#d62828", color: "#8b0000", fillOpacity: 0.8, weight: 1 },
+  c6: { fillColor: "#8b0000", color: "#4a0404", fillOpacity: 0.65, weight: 1 },
+  c7: { fillColor: "#4a0404", color: "#1f1f1f", fillOpacity: 0.45, weight: 0.5 },
+  c8: { fillColor: "#202020", color: "#000000", fillOpacity: 0.25, weight: 0.5 },
 };
 
 // Expressions MapLibre basées sur FIRE_STYLES
@@ -89,7 +106,7 @@ const fireStrokeWidthExpr = [
   "c6", FIRE_STYLES.c6.weight,
   "c7", FIRE_STYLES.c7.weight,
   "c8", FIRE_STYLES.c8.weight,
-  1,
+  0.5,
 ];
 
 const fireOpacityExpr = [
@@ -107,7 +124,7 @@ const fireOpacityExpr = [
 ];
 
 // ------------------------------------------------------
-// Utilitaires
+// Utilitaires & Calculs Géographiques
 // ------------------------------------------------------
 
 function formatDate(date) {
@@ -129,6 +146,114 @@ function categoryFor(ageHours) {
   if (ageHours <= 48) return "c6";
   if (ageHours <= 72) return "c7";
   return "c8";
+}
+
+// Calcul de distance orthodromique (Haversine) en km
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Filtrage spatial anti-faux positifs
+function filterFalsePositives(features, minNeighbors = 2, radiusKm = 15) {
+  if (features.length === 0) return [];
+  
+  return features.filter((featA, indexA) => {
+    let neighborsCount = 0;
+    const latA = featA.properties.lat;
+    const lngA = featA.properties.lng;
+
+    for (let indexB = 0; indexB < features.length; indexB++) {
+      if (indexA === indexB) continue;
+      
+      const featB = features[indexB];
+      const dist = getDistanceKm(latA, lngA, featB.properties.lat, featB.properties.lng);
+      
+      if (dist <= radiusKm) {
+        neighborsCount++;
+        if (neighborsCount >= minNeighbors) return true;
+      }
+    }
+    return false;
+  });
+}
+
+// ------------------------------------------------------
+// Regroupement Spatial & Calcul des Enveloppes (>10 points)
+// ------------------------------------------------------
+
+function computeFireClusters(activeFeatures) {
+  const visited = new Set();
+  const clusters = [];
+
+  for (let i = 0; i < activeFeatures.length; i++) {
+    if (visited.has(i)) continue;
+
+    const clusterGroup = [activeFeatures[i]];
+    visited.add(i);
+
+    for (let j = i + 1; j < activeFeatures.length; j++) {
+      if (visited.has(j)) continue;
+
+      const featA = activeFeatures[i];
+      const featB = activeFeatures[j];
+      const dist = getDistanceKm(
+        featA.properties.lat,
+        featA.properties.lng,
+        featB.properties.lat,
+        featB.properties.lng
+      );
+
+      if (dist <= CLUSTER_RADIUS_KM) {
+        clusterGroup.push(featB);
+        visited.add(j);
+      }
+    }
+
+    // On ne garde que les zones comportant STRICTEMENT PLUS de 10 points
+    if (clusterGroup.length > CLUSTER_THRESHOLD) {
+      let sumLat = 0;
+      let sumLng = 0;
+      let maxDistFromCenter = 0;
+
+      clusterGroup.forEach((f) => {
+        sumLat += f.properties.lat;
+        sumLng += f.properties.lng;
+      });
+
+      const centerLat = sumLat / clusterGroup.length;
+      const centerLng = sumLng / clusterGroup.length;
+
+      // Calcul de l'étendue maximale du cluster en km
+      clusterGroup.forEach((f) => {
+        const d = getDistanceKm(centerLat, centerLng, f.properties.lat, f.properties.lng);
+        if (d > maxDistFromCenter) maxDistFromCenter = d;
+      });
+
+      clusters.push({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [centerLng, centerLat],
+        },
+        properties: {
+          count: clusterGroup.length,
+          radiusKm: Math.max(maxDistFromCenter + 5, 10), // Rayon minimal de 10 km avec marge
+        },
+      });
+    }
+  }
+
+  return { type: "FeatureCollection", features: clusters };
 }
 
 function getFullSatelliteName(satCode, sourceName) {
@@ -290,7 +415,7 @@ async function fetchCsv(url, name) {
       });
     }
 
-    termLog(`${name} : ${features.length} points`);
+    termLog(`${name} : ${features.length} points bruts`);
     return features;
   } catch (error) {
     console.error(`Erreur NASA (${name})`, error);
@@ -326,14 +451,19 @@ export async function loadFires() {
     sources.map((source) => fetchCsv(source.url, source.name))
   );
 
-  const allFeatures = results.flat();
-  allFeatures.sort((a, b) => a.properties.timestamp - b.properties.timestamp);
+  const rawFeatures = results.flat();
+  
+  // Application du filtre spatial anti-faux-incendies
+  const filteredFeatures = filterFalsePositives(rawFeatures, MIN_NEIGHBORS, SEARCH_RADIUS_KM);
+  termLog(`Filtrage anti-bruit : ${rawFeatures.length} ➔ ${filteredFeatures.length} foyers conservés`);
 
-  allFiresGeoJSON.features = allFeatures;
+  filteredFeatures.sort((a, b) => a.properties.timestamp - b.properties.timestamp);
+
+  allFiresGeoJSON.features = filteredFeatures;
 
   timeSteps = [
     ...new Map(
-      allFeatures.map((feature) => [
+      filteredFeatures.map((feature) => [
         feature.properties.timestamp,
         {
           timestamp: feature.properties.timestamp,
@@ -344,7 +474,7 @@ export async function loadFires() {
   ];
 
   if (timeSteps.length === 0) {
-    updateStatus("🔥 Aucun foyer détecté");
+    updateStatus("🔥 Aucun foyer validé détecté");
     return;
   }
 
@@ -352,25 +482,55 @@ export async function loadFires() {
   const baseRadiusExpr = [
     "let",
     "base",
-    ["min", ["max", ["*", ["get", "frp"], 0.45], 7], 18],
+    ["min", ["max", ["*", ["get", "frp"], 0.15], 2.5], 7],
     [
       "match",
       ["get", "category"],
-      "c1", ["max", ["var", "base"], 8],
-      "c2", ["max", ["-", ["var", "base"], 1], 8],
-      "c3", ["max", ["-", ["var", "base"], 2], 8],
-      "c4", 8,
-      "c5", 8,
-      "c6", 8,
-      "c7", 8,
-      8
+      "c1", ["max", ["var", "base"], 3],
+      "c2", ["max", ["-", ["var", "base"], 0.5], 3],
+      "c3", ["max", ["-", ["var", "base"], 1], 3],
+      "c4", 3,
+      "c5", 2.5,
+      "c6", 2.5,
+      "c7", 2,
+      "c8", 2,
+      2
     ]
   ];
 
   if (!map.getSource("fires-source")) {
+    // 1. Source Incendies (Points)
     map.addSource("fires-source", {
       type: "geojson",
       data: allFiresGeoJSON,
+    });
+
+    // 2. Source Clusters de Zones (Grands Cercles)
+    map.addSource("fire-clusters-source", {
+      type: "geojson",
+      data: fireClustersGeoJSON,
+    });
+
+    // Layer 0 : Grand cercle de contour pour les zones > 10 foyers (Masqué à partir du zoom ville)
+    map.addLayer({
+      id: "fire-clusters-layer",
+      type: "circle",
+      source: "fire-clusters-source",
+      maxzoom: 10, // 👈 Les cercles disparaissent dès que le niveau de zoom atteint 10 (vue ville)
+      paint: {
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          5, ["*", ["get", "radiusKm"], 2.5 * CLUSTER_STYLE.scaleMultiplier],
+          10, ["*", ["get", "radiusKm"], 12 * CLUSTER_STYLE.scaleMultiplier]
+        ],
+        "circle-color": CLUSTER_STYLE.fillColor,
+        "circle-opacity": CLUSTER_STYLE.fillOpacity,
+        "circle-stroke-color": CLUSTER_STYLE.strokeColor,
+        "circle-stroke-width": CLUSTER_STYLE.strokeWidth,
+        "circle-stroke-opacity": CLUSTER_STYLE.strokeOpacity,
+      },
     });
 
     // Layer 1 : Halo lumineux d'incandescence (Glow) pour feux récents (c1, c2, c3)
@@ -379,9 +539,9 @@ export async function loadFires() {
       type: "circle",
       source: "fires-source",
       paint: {
-        "circle-radius": ["+", baseRadiusExpr, 6],
+        "circle-radius": ["+", baseRadiusExpr, 3],
         "circle-color": "#ffe600",
-        "circle-opacity": 0.35,
+        "circle-opacity": 0.3,
         "circle-stroke-width": 0,
       },
     });
@@ -450,11 +610,11 @@ export async function loadFires() {
   startPulse();
   updateFireSliderLabel(lastIndex);
   updateFireStatus();
-  updateStatus(`🔥 ${allFeatures.length} foyers détectés`);
+  updateStatus(`🔥 ${filteredFeatures.length} foyers confirmés`);
 }
 
 // ------------------------------------------------------
-// Animation de pulsation (c1, c2, c3 pulsent à vitesse constante)
+// Animation de pulsation
 // ------------------------------------------------------
 
 export function startPulse() {
@@ -463,48 +623,45 @@ export function startPulse() {
   let phase = 0;
 
   function animate() {
-    // Phase incrémentée plus doucement (0.04 au lieu de 0.2) pour un pulse régulier et fluide
     phase += 0.04;
 
-    const scaleFactor = 1 + Math.sin(phase) * 0.1;
-    const glowScaleFactor = 1 + Math.sin(phase) * 0.22;
+    const scaleFactor = 1 + Math.sin(phase) * 0.12;
+    const glowScaleFactor = 1 + Math.sin(phase) * 0.2;
 
-    // 1. Rayons des cercles principaux (c1, c2, c3)
     if (map.getLayer("fires-layer")) {
       const pulsedRadiusExpr = [
         "let",
         "base",
-        ["min", ["max", ["*", ["get", "frp"], 0.45], 7], 18],
+        ["min", ["max", ["*", ["get", "frp"], 0.15], 2.5], 7],
         [
           "match",
           ["get", "category"],
-          "c1", ["*", ["max", ["var", "base"], 8], scaleFactor],
-          "c2", ["*", ["max", ["-", ["var", "base"], 1], 8], scaleFactor],
-          "c3", ["*", ["max", ["-", ["var", "base"], 2], 8], scaleFactor],
-          // c4 à c8 restent fixes
-          "c4", 8,
-          "c5", 8,
-          "c6", 8,
-          "c7", 8,
-          8,
+          "c1", ["*", ["max", ["var", "base"], 3], scaleFactor],
+          "c2", ["*", ["max", ["-", ["var", "base"], 0.5], 3], scaleFactor],
+          "c3", ["*", ["max", ["-", ["var", "base"], 1], 3], scaleFactor],
+          "c4", 3,
+          "c5", 2.5,
+          "c6", 2.5,
+          "c7", 2,
+          "c8", 2,
+          2,
         ]
       ];
 
       map.setPaintProperty("fires-layer", "circle-radius", pulsedRadiusExpr);
     }
 
-    // 2. Halo lumineux (glow) synchronisé sur c1, c2, c3
     if (map.getLayer("fires-glow-layer")) {
       const pulsedGlowRadiusExpr = [
         "let",
         "base",
-        ["min", ["max", ["*", ["get", "frp"], 0.45], 7], 18],
+        ["min", ["max", ["*", ["get", "frp"], 0.15], 2.5], 7],
         [
           "match",
           ["get", "category"],
-          "c1", ["*", ["+", ["max", ["var", "base"], 8], 6], glowScaleFactor],
-          "c2", ["*", ["+", ["max", ["-", ["var", "base"], 1], 8], 6], glowScaleFactor],
-          "c3", ["*", ["+", ["max", ["-", ["var", "base"], 2], 8], 6], glowScaleFactor],
+          "c1", ["*", ["+", ["max", ["var", "base"], 3], 3], glowScaleFactor],
+          "c2", ["*", ["+", ["max", ["-", ["var", "base"], 0.5], 3], 3], glowScaleFactor],
+          "c3", ["*", ["+", ["max", ["-", ["var", "base"], 1], 3], 3], glowScaleFactor],
           0,
         ]
       ];
@@ -519,17 +676,20 @@ export function startPulse() {
 }
 
 // ------------------------------------------------------
-// Rendu dynamique de la carte (Gestion rembobinage / slider)
+// Rendu dynamique de la carte
 // ------------------------------------------------------
 
 function renderStep(index) {
   const step = timeSteps[index];
   if (!step) return;
 
+  const activeFeatures = [];
+
   allFiresGeoJSON.features.forEach((feature) => {
     if (feature.properties.timestamp <= step.timestamp) {
       const ageHours = (step.timestamp - feature.properties.timestamp) / 3600000;
       feature.properties.category = categoryFor(ageHours);
+      activeFeatures.push(feature);
     }
   });
 
@@ -548,11 +708,18 @@ function renderStep(index) {
     ]);
   }
 
+  // Recalcul et mise à jour des enveloppes de grands incendies (> 10 points)
+  const clusterSource = map.getSource("fire-clusters-source");
+  if (clusterSource) {
+    fireClustersGeoJSON = computeFireClusters(activeFeatures);
+    clusterSource.setData(fireClustersGeoJSON);
+  }
+
   currentStepIndex = index;
 }
 
 // ------------------------------------------------------
-// Animation Timeline (Play / Pause)
+// Animation Timeline
 // ------------------------------------------------------
 
 function togglePlay() {

@@ -19,7 +19,7 @@ const aircraftAnimations = new Map();
 export let showFireAircraft = true;
 export let showCommercialAircraft = false;
 
-// Hex de l'avion actuellement sélectionné pour l'affichage de la trace
+// Hex de l'avion actuellement sélectionné (optionnel)
 let selectedAircraftHex = null;
 
 // Historique des coordonnées : Map<hex, Array<[lon, lat]>>
@@ -56,7 +56,10 @@ const AIRCRAFT_TYPES = {
   A321: { manufacturer: "Airbus", model: "A321" },
   A330: { manufacturer: "Airbus", model: "A330" },
   A350: { manufacturer: "Airbus", model: "A350" },
-  AS50: { manufacturer: "Airbus Helicopters / Eurocopter", model: "AS350 Écureuil / H125" },
+  AS50: {
+    manufacturer: "Airbus Helicopters / Eurocopter",
+    model: "AS350 Écureuil / H125",
+  },
   B738: { manufacturer: "Boeing", model: "737-800" },
   B737: { manufacturer: "Boeing", model: "737" },
   B744: { manufacturer: "Boeing", model: "747" },
@@ -121,14 +124,7 @@ const HELICOPTER_RULES = {
     "B06",
     "B412",
   ],
-  typeIncludes: [
-    "PUMA",
-    "AS3",
-    "EC45",
-    "H145",
-    "NH90",
-    "CH53",
-  ],
+  typeIncludes: ["PUMA", "AS3", "EC45", "H145", "NH90", "CH53"],
   adsbCategories: ["A7"],
 };
 
@@ -263,10 +259,27 @@ function initTrailLayer() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#ff3838",
+        // Dégradé temporel du noir (0.0 = ancien) au blanc (1.0 = récent)
+        "line-color": [
+          "interpolate",
+          ["linear"],
+          ["get", "progress"],
+          0,
+          "#000000",
+          1,
+          "#ffffff",
+        ],
         "line-width": 3,
-        "line-opacity": 0.85,
-        "line-dasharray": [2, 1],
+        // Opacité progressive du tracé
+        "line-opacity": [
+          "interpolate",
+          ["linear"],
+          ["get", "progress"],
+          0,
+          0.3,
+          1,
+          0.95,
+        ],
       },
     });
   }
@@ -282,26 +295,43 @@ function updateTrailLayers() {
   const source = map.getSource("aircraft-trails");
   if (!source) return;
 
+  // Si le filtre d'affichage des avions de secours/incendie est désactivé, on masque la trace
+  if (!showFireAircraft) {
+    source.setData({ type: "FeatureCollection", features: [] });
+    return;
+  }
+
   const features = [];
 
-  if (selectedAircraftHex && aircraftTrails.has(selectedAircraftHex)) {
-    const markerData = aircraftMarkers.get(selectedAircraftHex);
+  // Parcourir l'ensemble des historiques d'avions de secours enregistrés
+  aircraftTrails.forEach((coords, hex) => {
+    const markerData = aircraftMarkers.get(hex);
+
+    // On s'assure que l'avion existe et est actuellement affiché sur la carte
     if (markerData && markerData.element.style.display !== "none") {
-      const coords = aircraftTrails.get(selectedAircraftHex);
       if (coords.length > 1) {
         const smoothedCoords = smoothCoordinates(coords, 2);
+        const totalPoints = smoothedCoords.length;
 
-        features.push({
-          type: "Feature",
-          properties: { hex: selectedAircraftHex },
-          geometry: {
-            type: "LineString",
-            coordinates: smoothedCoords,
-          },
-        });
+        // Découpage en segments pour appliquer la couleur dégradée selon l'ancienneté du point
+        for (let i = 0; i < totalPoints - 1; i++) {
+          const progress = i / (totalPoints - 1); // 0.0 (plus ancien) ➔ 1.0 (plus récent)
+
+          features.push({
+            type: "Feature",
+            properties: {
+              hex,
+              progress,
+            },
+            geometry: {
+              type: "LineString",
+              coordinates: [smoothedCoords[i], smoothedCoords[i + 1]],
+            },
+          });
+        }
       }
     }
-  }
+  });
 
   source.setData({
     type: "FeatureCollection",
@@ -322,7 +352,11 @@ function recordPosition(aircraft) {
   let trail = aircraftTrails.get(hex) || [];
   const lastPoint = trail[trail.length - 1];
 
-  if (!lastPoint || lastPoint[0] !== aircraft.lon || lastPoint[1] !== aircraft.lat) {
+  if (
+    !lastPoint ||
+    lastPoint[0] !== aircraft.lon ||
+    lastPoint[1] !== aircraft.lat
+  ) {
     trail.push([aircraft.lon, aircraft.lat]);
 
     if (trail.length > MAX_TRAIL_POINTS) {
@@ -640,13 +674,11 @@ function renderAircrafts(aircrafts) {
       popup.on("close", () => {
         if (selectedAircraftHex === hex) {
           selectedAircraftHex = null;
-          updateTrailLayers();
         }
       });
 
       el.addEventListener("click", () => {
         selectedAircraftHex = hex;
-        updateTrailLayers();
       });
 
       const marker = new maplibregl.Marker({ element: el })
@@ -670,7 +702,7 @@ function renderAircrafts(aircrafts) {
         aircraft.lon,
         aircraft.speed,
         aircraft.track,
-        5
+        5,
       );
 
       aircraftPositions.set(hex, { lat: aircraft.lat, lon: aircraft.lon });
@@ -684,7 +716,7 @@ function renderAircrafts(aircrafts) {
         targetPos.lon,
         aircraft.track,
         aircraft.track,
-        ANIMATION_DURATION
+        ANIMATION_DURATION,
       );
     } else {
       // Mise à jour de l'horodatage
@@ -712,7 +744,7 @@ function renderAircrafts(aircrafts) {
           fromLon,
           aircraft.speed,
           aircraft.track,
-          5
+          5,
         );
         toLat = projected.lat;
         toLon = projected.lon;
@@ -729,7 +761,7 @@ function renderAircrafts(aircrafts) {
         toLon,
         currentTrack,
         aircraft.track,
-        ANIMATION_DURATION
+        ANIMATION_DURATION,
       );
 
       markerData.marker.getPopup().setHTML(createPopup(aircraft));
@@ -819,6 +851,11 @@ function createPopup(aircraft) {
   const altitudeM =
     aircraft.altitude != null ? Math.round(aircraft.altitude * 0.3048) : "?";
 
+  const reg = aircraft.registration;
+  const linkHtml = reg
+    ? `<a href="https://fr.flightaware.com/live/flight/${reg}" target="_blank" rel="noopener noreferrer" style="display: inline-block;">plus d'infos</a>`
+    : "Non disponible";
+
   return `
     <div class="aircraft-popup">
 
@@ -880,6 +917,10 @@ function createPopup(aircraft) {
             <span class="telemetry-value">${aircraft.track ?? "?"}°</span>
           </div>
 
+        </div>
+
+        <div class="aircraft-more-info" style="text-align: center;">
+          ${linkHtml}
         </div>
 
       </div>
